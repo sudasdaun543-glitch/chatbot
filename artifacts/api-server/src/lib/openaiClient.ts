@@ -13,7 +13,7 @@ export type Archetype =
 export type ChatMessage = { role: "user" | "assistant" | "system"; content: string };
 
 const DEEPSEEK_BASE_URL = "https://api.deepseek.com";
-const DEEPSEEK_MODEL = "deepseek-chat";
+const DEEPSEEK_MODEL    = "deepseek-chat";
 
 function createClient(): OpenAI | null {
   const key = process.env.OPENAI_API_KEY1 ?? process.env.OPENAI_API_KEY;
@@ -96,17 +96,30 @@ Act like a real person, not a bot. Never break character.`,
 export async function getAIReply(
   archetype: Archetype,
   history: ChatMessage[],
-  stateHint?: string
+  stateHint?: string,
+  learningExamples?: string[],
 ): Promise<string> {
   const client = createClient();
   if (!client) return "...";
 
-  const basePrompt = BASE_PROMPTS[archetype] ?? BASE_PROMPTS["greener"];
-  const systemPrompt = stateHint ? `${basePrompt}\n\n${stateHint}` : basePrompt;
+  const basePrompt   = BASE_PROMPTS[archetype] ?? BASE_PROMPTS["greener"];
+  const isRu         = !archetype.endsWith("_en");
+  let systemPrompt   = stateHint ? `${basePrompt}\n\n${stateHint}` : basePrompt;
+
+  if (learningExamples && learningExamples.length > 0) {
+    const exBlock = isRu
+      ? `\n\n[Примеры успешных диалогов с этим типом клиента — учись у них, как лучший оператор взаимодействует с тобой:]`
+      : `\n\n[Examples of successful conversations with this client type — observe how the best operators interact with you:]`;
+    const exText = learningExamples
+      .slice(0, 2)
+      .map((ex, i) => `--- Пример ${i + 1} ---\n${ex}`)
+      .join("\n\n");
+    systemPrompt += exBlock + "\n" + exText;
+  }
 
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
     { role: "system", content: systemPrompt },
-    ...history.map((m) => ({ role: m.role, content: m.content }) as OpenAI.Chat.ChatCompletionMessageParam),
+    ...history.map(m => ({ role: m.role, content: m.content }) as OpenAI.Chat.ChatCompletionMessageParam),
   ];
 
   const response = await client.chat.completions.create({
@@ -121,109 +134,92 @@ export async function getAIReply(
 
 export async function generateAIFeedback(
   archetype: Archetype,
-  history: ChatMessage[]
+  history: ChatMessage[],
 ): Promise<{ score: number; strengths: string; mistakes: string }> {
   const client = createClient();
-  const isRu = !archetype.endsWith("_en");
+  const isRu   = !archetype.endsWith("_en");
 
   const fallback = {
-    score: 5,
+    score:     5,
     strengths: isRu ? "Начало положено" : "Getting started",
-    mistakes: isRu ? "Слишком мало сообщений для полного анализа" : "Too few messages for full analysis",
+    mistakes:  isRu ? "Слишком мало сообщений для полного анализа" : "Too few messages for full analysis",
   };
 
   if (!client || history.length < 2) return fallback;
 
-  const operatorMessages = history.filter((m) => m.role === "user");
-  const memberMessages = history.filter((m) => m.role === "assistant");
-
+  const operatorMessages = history.filter(m => m.role === "user");
+  const memberMessages   = history.filter(m => m.role === "assistant");
   const conversationText = history
-    .map((m) => `${m.role === "user" ? "ОПЕРАТОР" : "КЛИЕНТ"}: ${m.content}`)
+    .map(m => `${m.role === "user" ? "ОПЕРАТОР" : "КЛИЕНТ"}: ${m.content}`)
     .join("\n");
 
   const archetypeName = {
-    greener: "Новичок (стеснительный, неуверенный)",
-    whale: "Кит (платёжеспособный, ценит внимание)",
-    troll: "Тролль (провокатор, грубиян)",
-    freeloader: "Халявщик (ищет бесплатное, давит на жалость)",
-    greener_en: "Newbie (shy, uncertain)",
-    whale_en: "Whale (high spender, values attention)",
-    troll_en: "Troll (provocateur, rude)",
-    freeloader_en: "Freeloader (wants freebies, guilt-trips)",
+    greener:      "Новичок (стеснительный, неуверенный)",
+    whale:        "Кит (платёжеспособный, ценит внимание)",
+    troll:        "Тролль (провокатор, грубиян)",
+    freeloader:   "Халявщик (ищет бесплатное, давит на жалость)",
+    greener_en:   "Newbie (shy, uncertain)",
+    whale_en:     "Whale (high spender, values attention)",
+    troll_en:     "Troll (provocateur, rude)",
+    freeloader_en:"Freeloader (wants freebies, guilt-trips)",
   }[archetype] ?? archetype;
 
   const prompt = isRu
-    ? `Ты — строгий и честный тренер операторов вебкам-чата. Твоя задача — объективно оценить работу оператора по реальному диалогу.
+    ? `Ты — строгий и честный тренер операторов вебкам-чата. Объективно оцени работу оператора.
 
-ТЕМА ДИАЛОГА: оператор общается с клиентом типа "${archetypeName}"
+АРХЕТИП КЛИЕНТА: "${archetypeName}"
 СООБЩЕНИЙ ОПЕРАТОРА: ${operatorMessages.length}
 СООБЩЕНИЙ КЛИЕНТА: ${memberMessages.length}
 
 ДИАЛОГ:
 ${conversationText}
 
-КРИТЕРИИ ОЦЕНКИ (оцени каждый пункт мысленно):
-1. Вовлечённость — задавал ли оператор вопросы, проявлял ли искренний интерес?
-2. Тактика продаж — подводил ли к платному контенту, создавал ли ценность?
-3. Работа с типом клиента — учитывал ли поведение именно этого архетипа?
-4. Тон и стиль — был ли тёплым, живым, не роботизированным?
-5. Удержание — не давал ли клиенту уйти, поддерживал ли диалог?
+КРИТЕРИИ (оцени каждый):
+1. Вовлечённость — вопросы, искренний интерес?
+2. Тактика продаж — подводил к платному? создавал ценность?
+3. Работа с архетипом — учитывал поведение именно этого типа?
+4. Тон и стиль — тёплый, живой, не роботизированный?
+5. Удержание — поддерживал диалог, не давал уйти?
 
-ШКАЛА ОЦЕНОК:
-9-10 — отличная работа: тёплый тон, правильная тактика, клиент вовлечён и доволен
-7-8  — хорошая работа: большинство критериев выполнено, мелкие промахи
-5-6  — средне: оператор общается, но без стратегии, упускает возможности
-3-4  — слабо: короткие ответы, нет вовлечённости, клиент не чувствует интереса
-1-2  — очень плохо: грубость, игнор, провоцирование ухода
+ШКАЛА:
+9-10 — отлично  7-8 — хорошо  5-6 — средне  3-4 — слабо  1-2 — очень плохо
 
-ВАЖНО: Не давай среднюю оценку "на всякий случай". Оценивай строго по тому, что видишь в диалоге. Если диалог короткий и слабый — ставь 3-4. Если оператор отлично работает — ставь 8-9. Будь конкретным.
+Не давай среднюю оценку «на всякий случай». Оценивай строго по диалогу.
 
-Ответь СТРОГО в JSON без лишнего текста:
-{"score": ЧИСЛО_ОТ_1_ДО_10, "strengths": "конкретное что сделано хорошо со ссылкой на диалог", "mistakes": "конкретные ошибки или что упущено"}`
-    : `You are a strict and honest webcam chat operator coach. Your task is to objectively evaluate the operator based on the real conversation.
+Ответь СТРОГО в JSON:
+{"score": ЧИСЛО, "strengths": "конкретно что хорошо", "mistakes": "конкретно что плохо или упущено"}`
+    : `You are a strict webcam chat operator coach. Objectively evaluate the operator.
 
 CLIENT TYPE: "${archetypeName}"
-OPERATOR MESSAGES: ${operatorMessages.length}
-CLIENT MESSAGES: ${memberMessages.length}
+OPERATOR MESSAGES: ${operatorMessages.length} | CLIENT MESSAGES: ${memberMessages.length}
 
 CONVERSATION:
 ${conversationText}
 
-SCORING CRITERIA (evaluate each mentally):
-1. Engagement — did the operator ask questions, show genuine interest?
-2. Sales tactics — did they guide toward paid content, create value?
-3. Archetype handling — did they adapt to this specific client type?
-4. Tone & style — warm, natural, not robotic?
-5. Retention — kept the client engaged, prevented dropout?
+CRITERIA: engagement, sales tactics, archetype handling, tone, retention.
+SCALE: 9-10 excellent · 7-8 good · 5-6 average · 3-4 weak · 1-2 very poor
 
-SCORING SCALE:
-9-10 — excellent: warm tone, right tactics, client engaged and pleased
-7-8  — good: most criteria met, minor slips
-5-6  — average: communicating but no strategy, missing opportunities
-3-4  — weak: short replies, no engagement, client doesn't feel interest
-1-2  — very poor: rudeness, ignoring, driving the client away
+Do NOT default to middle score. Score strictly from the actual conversation.
 
-IMPORTANT: Do NOT default to a middle score. Score strictly based on what you see. Short weak dialogue = 3-4. Excellent work = 8-9. Be specific.
-
-Reply STRICTLY in JSON, no extra text:
-{"score": NUMBER_1_TO_10, "strengths": "specific good things with reference to the conversation", "mistakes": "specific mistakes or missed opportunities"}`;
+Reply STRICTLY in JSON:
+{"score": NUMBER, "strengths": "specific good things", "mistakes": "specific mistakes or missed opportunities"}`;
 
   try {
     const response = await client.chat.completions.create({
       model: DEEPSEEK_MODEL,
       messages: [{ role: "user", content: prompt }],
       max_tokens: 400,
-      temperature: 0.4,
+      temperature: 0.3,
     });
 
-    const text = response.choices[0]?.message?.content ?? "{}";
+    const text      = response.choices[0]?.message?.content ?? "{}";
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       const parsed = JSON.parse(jsonMatch[0]) as { score?: number; strengths?: string; mistakes?: string };
       return {
-        score: Math.min(10, Math.max(1, Math.round(parsed.score ?? 5))),
+        score:     Math.min(10, Math.max(1, Math.round(parsed.score ?? 5))),
         strengths: parsed.strengths ?? fallback.strengths,
-        mistakes: parsed.mistakes ?? fallback.mistakes,
+        mistakes:  parsed.mistakes  ?? fallback.mistakes,
       };
     }
   } catch (_err) {
