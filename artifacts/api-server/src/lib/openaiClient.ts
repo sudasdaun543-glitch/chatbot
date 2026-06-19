@@ -1,9 +1,5 @@
 import OpenAI from "openai";
 
-export const openai = process.env.OPENAI_API_KEY
-  ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-  : null;
-
 export type Archetype =
   | "greener"
   | "whale"
@@ -13,6 +9,14 @@ export type Archetype =
   | "whale_en"
   | "troll_en"
   | "freeloader_en";
+
+export type ChatMessage = { role: "user" | "assistant" | "system"; content: string };
+
+function createClient(): OpenAI | null {
+  const key = process.env.OPENAI_API_KEY;
+  if (!key) return null;
+  return new OpenAI({ apiKey: key });
+}
 
 const SYSTEM_PROMPTS: Record<Archetype, string> = {
   greener: `Ты — новичок в вебкам-чате. Пишешь на русском языке.
@@ -100,13 +104,16 @@ Your behavior:
 Act like a real person, not a bot. Never break character.`,
 };
 
-export type ChatMessage = { role: "user" | "assistant" | "system"; content: string };
+export function hasOpenAI(): boolean {
+  return !!process.env.OPENAI_API_KEY;
+}
 
 export async function getAIReply(
   archetype: Archetype,
   history: ChatMessage[]
 ): Promise<string> {
-  if (!openai) return "...";
+  const client = createClient();
+  if (!client) return "...";
 
   const systemPrompt = SYSTEM_PROMPTS[archetype] ?? SYSTEM_PROMPTS["greener"];
 
@@ -115,21 +122,31 @@ export async function getAIReply(
     ...history.map((m) => ({ role: m.role, content: m.content }) as OpenAI.Chat.ChatCompletionMessageParam),
   ];
 
-  const response = await openai.chat.completions.create({
+  const response = await client.chat.completions.create({
     model: "gpt-4o-mini",
     messages,
     max_tokens: 120,
     temperature: 0.9,
   });
 
-  return response.choices[0]?.message?.content?.trim() ?? "...";
+  return response.choices[0]?.message?.content?.trim() || "Хм...";
 }
 
 export async function generateAIFeedback(
   archetype: Archetype,
   history: ChatMessage[]
 ): Promise<{ score: number; strengths: string; mistakes: string }> {
+  const client = createClient();
   const isRu = !archetype.endsWith("_en");
+
+  const fallback = {
+    score: 5,
+    strengths: isRu ? "Хорошая работа" : "Good work",
+    mistakes: isRu ? "Есть куда расти" : "Room to improve",
+  };
+
+  if (!client) return fallback;
+
   const conversationText = history
     .map((m) => `${m.role === "user" ? "Оператор" : "Клиент"}: ${m.content}`)
     .join("\n");
@@ -159,8 +176,7 @@ Rate the operator's performance:
 Reply strictly in JSON: {"score": N, "strengths": "...", "mistakes": "..."}`;
 
   try {
-    if (!openai) throw new Error("no openai");
-    const response = await openai.chat.completions.create({
+    const response = await client.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [{ role: "user", content: prompt }],
       max_tokens: 300,
@@ -173,17 +189,13 @@ Reply strictly in JSON: {"score": N, "strengths": "...", "mistakes": "..."}`;
       const parsed = JSON.parse(jsonMatch[0]) as { score?: number; strengths?: string; mistakes?: string };
       return {
         score: Math.min(10, Math.max(1, Math.round(parsed.score ?? 5))),
-        strengths: parsed.strengths ?? (isRu ? "Хорошая работа" : "Good work"),
-        mistakes: parsed.mistakes ?? (isRu ? "Есть куда расти" : "Room to improve"),
+        strengths: parsed.strengths ?? fallback.strengths,
+        mistakes: parsed.mistakes ?? fallback.mistakes,
       };
     }
   } catch (_err) {
     // fallback below
   }
 
-  return {
-    score: 5,
-    strengths: isRu ? "Хорошая работа" : "Good work",
-    mistakes: isRu ? "Есть куда расти" : "Room to improve",
-  };
+  return fallback;
 }
