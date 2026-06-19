@@ -117,12 +117,12 @@ router.get("/coach/sessions", async (_req, res) => {
 });
 
 router.get("/ai-status", (_req, res) => {
-  const hasKey = !!process.env["OPENAI_API_KEY"];
+  const hasKey = !!(process.env["OPENAI_API_KEY1"] ?? process.env["OPENAI_API_KEY"]);
   res.json({
     status: hasKey ? "online" : "offline",
-    model: hasKey ? "gpt-4o-mini" : "не подключён",
-    base_url: hasKey ? "https://api.openai.com" : "",
-    error: hasKey ? null : "OPENAI_API_KEY не задан.",
+    model: hasKey ? "deepseek-chat" : "не подключён",
+    base_url: hasKey ? "https://api.deepseek.com" : "",
+    error: hasKey ? null : "OPENAI_API_KEY1 не задан.",
   });
 });
 
