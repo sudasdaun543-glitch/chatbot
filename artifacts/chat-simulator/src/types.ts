@@ -33,7 +33,7 @@ export interface FeedbackData {
 
 export interface ChatMessage {
   id?: string;
-  type: "message" | "system" | "error";
+  type: "message" | "system" | "error" | "typing";
   role: "user" | "assistant" | "system";
   content: string;
   action: { type: string; amount?: number } | null;
