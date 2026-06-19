@@ -31,7 +31,7 @@ export default function MessageInput({ onSend, onCloseSession, disabled }: Props
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder="Введите сообщение..."
+        placeholder="Введите сообщение... (Enter — отправить)"
         rows={2}
         disabled={disabled}
         autoFocus
@@ -41,16 +41,18 @@ export default function MessageInput({ onSend, onCloseSession, disabled }: Props
           type="submit"
           className="btn btn-send"
           disabled={disabled || !text.trim()}
+          title="Отправить"
         >
-          Отправить
+          ↑
         </button>
         <button
           type="button"
           className="btn btn-close"
           onClick={onCloseSession}
           disabled={disabled}
+          title="Завершить сессию"
         >
-          Завершить сессию
+          Завершить
         </button>
       </div>
     </form>
