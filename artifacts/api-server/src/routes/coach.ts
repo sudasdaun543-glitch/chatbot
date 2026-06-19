@@ -117,7 +117,7 @@ router.get("/coach/sessions", async (_req, res) => {
 });
 
 router.get("/ai-status", (_req, res) => {
-  const hasKey = !!process.env.OPENAI_API_KEY;
+  const hasKey = !!process.env["OPENAI_API_KEY"];
   res.json({
     status: hasKey ? "online" : "offline",
     model: hasKey ? "gpt-4o-mini" : "не подключён",
