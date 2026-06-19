@@ -1,4 +1,5 @@
 import type { ChatMessage } from "../types";
+import bunnyImg from "../assets/bunny.png";
 
 interface Props {
   message: ChatMessage;
@@ -38,13 +39,16 @@ export default function MessageBubble({ message }: Props) {
   if (role === "assistant") {
     return (
       <div className="message-row left">
-        <div className="bubble member-bubble">
-          {content}
-          {action?.type === "send_tips" && (
-            <div className="tip-action-badge">💰 +{action.amount} токенов</div>
-          )}
+        <img src={bunnyImg} alt="" className="msg-avatar" />
+        <div>
+          <div className="bubble member-bubble">
+            {content}
+            {action?.type === "send_tips" && (
+              <div className="tip-action-badge">💰 +{action.amount} токенов</div>
+            )}
+          </div>
+          <span className="bubble-time">{time}</span>
         </div>
-        <span className="bubble-time">{time}</span>
       </div>
     );
   }
