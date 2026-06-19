@@ -91,13 +91,24 @@ export function attachWebSocketServer(server: Server): void {
               feedback: null,
             }));
           }
-        } catch (err) {
+        } catch (err: unknown) {
           logger.error({ err }, "WS message error");
+          const isQuota =
+            typeof err === "object" &&
+            err !== null &&
+            ("code" in err
+              ? (err as { code?: string }).code === "insufficient_quota"
+              : "status" in err
+                ? (err as { status?: number }).status === 429
+                : false);
+          const errorText = isQuota
+            ? "⚠ Лимит OpenAI исчерпан. Пополните баланс на platform.openai.com/settings/billing"
+            : "Ошибка при обработке сообщения. Попробуйте ещё раз.";
           if (ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({
-              type: "message",
-              role: "assistant",
-              content: "Ошибка при обработке сообщения. Попробуйте ещё раз.",
+              type: "error",
+              role: "system",
+              content: errorText,
               action: null,
               feedback: null,
             }));
