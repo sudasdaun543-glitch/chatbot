@@ -81,6 +81,13 @@ async function runMigrations() {
         mistakes TEXT,
         created_at TIMESTAMP NOT NULL DEFAULT NOW()
       );
+      CREATE TABLE IF NOT EXISTS learning_examples (
+        id TEXT PRIMARY KEY,
+        archetype TEXT NOT NULL,
+        conversation TEXT NOT NULL,
+        score INTEGER NOT NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
     `);
     logger.info("Database migrations applied");
 
