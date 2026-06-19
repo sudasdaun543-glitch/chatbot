@@ -10,26 +10,28 @@ interface Props {
   onNewSession: () => void;
 }
 
-const ARCHETYPE_NAMES: Record<string, string> = {
-  greener: "Новичком",
-  whale: "Китом",
-  troll: "Троллем",
-  freeloader: "Халявщиком",
-  greener_en: "Newbie (EN)",
-  whale_en: "Whale (EN)",
-  troll_en: "Troll (EN)",
-  freeloader_en: "Freeloader (EN)",
+const ARCHETYPE_META: Record<string, { name: string; emoji: string; color: string }> = {
+  greener:      { name: "Новичок",    emoji: "🌱", color: "#22c55e" },
+  whale:        { name: "Кит",        emoji: "🐋", color: "#7c6ef5" },
+  troll:        { name: "Тролль",     emoji: "👹", color: "#ef4444" },
+  freeloader:   { name: "Халявщик",   emoji: "🤑", color: "#f59e0b" },
+  greener_en:   { name: "Newbie",     emoji: "🌱", color: "#22c55e" },
+  whale_en:     { name: "Whale",      emoji: "🐋", color: "#7c6ef5" },
+  troll_en:     { name: "Troll",      emoji: "👹", color: "#ef4444" },
+  freeloader_en:{ name: "Freeloader", emoji: "🤑", color: "#f59e0b" },
 };
 
 export default function ChatWindow({ session, onNewSession }: Props) {
-  const { messages, send, isConnected } = useWebSocket(session.id);
+  const { messages, send, isConnected, isTyping } = useWebSocket(session.id);
   const [feedback, setFeedback] = useState<FeedbackData | null>(null);
   const [sessionClosed, setSessionClosed] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
+  const meta = ARCHETYPE_META[session.archetype] ?? { name: session.archetype, emoji: "👤", color: "#7c6ef5" };
+
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, isTyping]);
 
   useEffect(() => {
     const lastMsg = messages[messages.length - 1];
@@ -40,9 +42,7 @@ export default function ChatWindow({ session, onNewSession }: Props) {
   }, [messages]);
 
   const handleSend = useCallback(
-    (text: string) => {
-      send({ type: "message", content: text });
-    },
+    (text: string) => { send({ type: "message", content: text }); },
     [send]
   );
 
@@ -50,58 +50,84 @@ export default function ChatWindow({ session, onNewSession }: Props) {
     send({ type: "close_session", content: "" });
   }, [send]);
 
+  const scoreColor = feedback
+    ? feedback.score >= 8 ? "var(--green)" : feedback.score >= 5 ? "var(--yellow)" : "var(--red)"
+    : "var(--text)";
+
   return (
-    <div className="chat-window">
-      <div className="chat-header">
-        <span className="chat-title">
-          Чат с{" "}
-          <strong>
-            {ARCHETYPE_NAMES[session.archetype] ?? session.archetype}
-          </strong>
-        </span>
-        <span className={`connection-status ${isConnected ? "connected" : ""}`}>
-          {isConnected ? "● Онлайн" : "● Подключение..."}
-        </span>
-        <AIStatusBadge />
-      </div>
-
-      <div className="messages-container">
-        {messages.length === 0 && (
-          <div className="empty-chat">
-            <p>Начните диалог. Мембер ждёт вас!</p>
-          </div>
-        )}
-        {messages.map((m) => (
-          <MessageBubble key={m.id} message={m} />
-        ))}
-        <div ref={chatEndRef} />
-      </div>
-
-      {sessionClosed && feedback ? (
-        <div className="feedback-overlay">
-          <h2>📊 Результат тренировки</h2>
-          <div className="feedback-inline-score">
-            Оценка: <strong>{feedback.score}</strong> / 10
-          </div>
-          <div className="feedback-inline-section">
-            <h4>✅ Сильные стороны</h4>
-            <p>{feedback.strengths}</p>
-          </div>
-          <div className="feedback-inline-section">
-            <h4>⚠ Ошибки</h4>
-            <p>{feedback.mistakes}</p>
-          </div>
-          <button className="btn btn-new-session" onClick={onNewSession}>
-            🔄 Начать новую тренировку
-          </button>
+    <div className="chat-layout">
+      <div className="chat-sidebar">
+        <div
+          className="member-avatar"
+          style={{ background: `${meta.color}22`, border: `2px solid ${meta.color}44` }}
+        >
+          {meta.emoji}
+          {isConnected && <div className="avatar-online-dot" />}
         </div>
-      ) : (
-        <MessageInput
-          onSend={handleSend}
-          onCloseSession={handleCloseSession}
-          disabled={!isConnected || sessionClosed}
-        />
-      )}
+        <div className="sidebar-archetype-label">{meta.name}</div>
+      </div>
+
+      <div className="chat-main">
+        <div className="chat-header">
+          <div className="chat-header-left">
+            <span className="chat-title">Чат с {meta.name}</span>
+            <span className={`connection-status ${isConnected ? "connected" : ""}`}>
+              {isConnected ? "В сети" : "Подключение..."}
+            </span>
+          </div>
+          <AIStatusBadge />
+        </div>
+
+        <div className="messages-container">
+          {messages.length === 0 && (
+            <div className="empty-chat">
+              <div className="empty-chat-icon">{meta.emoji}</div>
+              <p className="empty-chat-text">Напишите первое сообщение</p>
+            </div>
+          )}
+          {messages.map((m) => (
+            <MessageBubble key={m.id} message={m} />
+          ))}
+          {isTyping && (
+            <div className="message-row left">
+              <div className="typing-bubble">
+                <div className="typing-dot" />
+                <div className="typing-dot" />
+                <div className="typing-dot" />
+              </div>
+            </div>
+          )}
+          <div ref={chatEndRef} />
+        </div>
+
+        {sessionClosed && feedback ? (
+          <div className="feedback-overlay">
+            <div className="feedback-score-ring">
+              <div className="feedback-score-number" style={{ color: scoreColor }}>
+                {feedback.score}<span style={{ fontSize: "1.1rem", color: "var(--text2)", fontWeight: 400 }}>/10</span>
+              </div>
+              <div className="feedback-score-label">Результат тренировки</div>
+            </div>
+            <div className="feedback-inline-section">
+              <h4>Сильные стороны</h4>
+              <p>{feedback.strengths}</p>
+            </div>
+            <div className="feedback-inline-section">
+              <h4>Зоны роста</h4>
+              <p>{feedback.mistakes}</p>
+            </div>
+            <button className="btn btn-new-session" onClick={onNewSession}>
+              Новая тренировка
+            </button>
+          </div>
+        ) : (
+          <MessageInput
+            onSend={handleSend}
+            onCloseSession={handleCloseSession}
+            disabled={!isConnected || sessionClosed}
+          />
+        )}
+      </div>
     </div>
   );
 }
