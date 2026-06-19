@@ -4,7 +4,7 @@ import type { Server } from "http";
 import { db, sessionsTable, feedbackTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import crypto from "crypto";
-import { openai, getAIReply, generateAIFeedback, type Archetype, type ChatMessage } from "./openaiClient.js";
+import { hasOpenAI, getAIReply, generateAIFeedback, type Archetype, type ChatMessage } from "./openaiClient.js";
 import { getNextReply, generateFeedback, cleanupSession } from "./mockAI.js";
 import { logger } from "./logger.js";
 
@@ -67,7 +67,7 @@ export function attachWebSocketServer(server: Server): void {
             let replyText: string;
             let tipAction: { type: string; amount: number } | null = null;
 
-            if (openai) {
+            if (hasOpenAI()) {
               replyText = await getAIReply(archetype, history);
               const isWhale = archetype === "whale" || archetype === "whale_en";
               if (isWhale && history.length >= 6 && Math.random() < 0.3) {
@@ -116,7 +116,7 @@ export function attachWebSocketServer(server: Server): void {
 async function handleClose(ws: WebSocket, sessionId: string, archetype: Archetype) {
   const history = sessionHistories.get(sessionId) ?? [];
 
-  const feedback = openai
+  const feedback = hasOpenAI()
     ? await generateAIFeedback(archetype, history)
     : generateFeedback(sessionId);
 
