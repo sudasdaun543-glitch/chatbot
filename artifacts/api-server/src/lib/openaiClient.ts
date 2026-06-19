@@ -12,10 +12,17 @@ export type Archetype =
 
 export type ChatMessage = { role: "user" | "assistant" | "system"; content: string };
 
+const DEEPSEEK_BASE_URL = "https://api.deepseek.com";
+const DEEPSEEK_MODEL = "deepseek-chat";
+
 function createClient(): OpenAI | null {
-  const key = process.env.OPENAI_API_KEY;
+  const key = process.env.OPENAI_API_KEY1 ?? process.env.OPENAI_API_KEY;
   if (!key) return null;
-  return new OpenAI({ apiKey: key });
+  return new OpenAI({ apiKey: key, baseURL: DEEPSEEK_BASE_URL });
+}
+
+export function hasOpenAI(): boolean {
+  return !!(process.env.OPENAI_API_KEY1 ?? process.env.OPENAI_API_KEY);
 }
 
 const SYSTEM_PROMPTS: Record<Archetype, string> = {
@@ -26,7 +33,7 @@ const SYSTEM_PROMPTS: Record<Archetype, string> = {
 - Сомневаешься, стоит ли тратить деньги
 - Легко отвлекаешься, меняешь тему
 - Если оператор проявляет тепло и интерес — начинаешь открываться
-- Пишешь короткими фразами, часто с многоточиями
+- Пишешь короткими фразами, иногда с паузами
 - Иногда робко интересуешься, что тут можно купить
 Веди себя как живой человек, не как бот. Никогда не выходи из роли.`,
 
@@ -68,7 +75,7 @@ Your behavior:
 - Unsure whether to spend money
 - Easily distracted, change topics
 - If the operator shows warmth and interest — you start to open up
-- Write in short phrases, often with ellipses
+- Write in short phrases
 - Occasionally ask shyly about what can be purchased
 Act like a real person, not a bot. Never break character.`,
 
@@ -104,10 +111,6 @@ Your behavior:
 Act like a real person, not a bot. Never break character.`,
 };
 
-export function hasOpenAI(): boolean {
-  return !!process.env.OPENAI_API_KEY;
-}
-
 export async function getAIReply(
   archetype: Archetype,
   history: ChatMessage[]
@@ -123,9 +126,9 @@ export async function getAIReply(
   ];
 
   const response = await client.chat.completions.create({
-    model: "gpt-4o-mini",
+    model: DEEPSEEK_MODEL,
     messages,
-    max_tokens: 120,
+    max_tokens: 150,
     temperature: 0.9,
   });
 
@@ -177,7 +180,7 @@ Reply strictly in JSON: {"score": N, "strengths": "...", "mistakes": "..."}`;
 
   try {
     const response = await client.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: DEEPSEEK_MODEL,
       messages: [{ role: "user", content: prompt }],
       max_tokens: 300,
       temperature: 0.3,
