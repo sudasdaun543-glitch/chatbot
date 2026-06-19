@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import bunnyImg from "../assets/bunny.png";
 import type { AuthResponse } from "../types";
 
 interface Props {
@@ -42,7 +43,7 @@ export default function LoginScreen({ onLogin, onCoachPanel }: Props) {
     <div className="login-screen">
       <div className="login-card">
         <div className="login-bunny-wrap">
-          <img src="/bunny.png?v=2" alt="bunny" className="login-bunny" />
+          <img src={bunnyImg} alt="bunny" className="login-bunny" />
         </div>
 
         <div className="brand-mark">
