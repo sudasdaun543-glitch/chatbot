@@ -128,46 +128,92 @@ export async function generateAIFeedback(
 
   const fallback = {
     score: 5,
-    strengths: isRu ? "Хорошая работа" : "Good work",
-    mistakes: isRu ? "Есть куда расти" : "Room to improve",
+    strengths: isRu ? "Начало положено" : "Getting started",
+    mistakes: isRu ? "Слишком мало сообщений для полного анализа" : "Too few messages for full analysis",
   };
 
-  if (!client) return fallback;
+  if (!client || history.length < 2) return fallback;
+
+  const operatorMessages = history.filter((m) => m.role === "user");
+  const memberMessages = history.filter((m) => m.role === "assistant");
 
   const conversationText = history
-    .map((m) => `${m.role === "user" ? "Оператор" : "Клиент"}: ${m.content}`)
+    .map((m) => `${m.role === "user" ? "ОПЕРАТОР" : "КЛИЕНТ"}: ${m.content}`)
     .join("\n");
 
+  const archetypeName = {
+    greener: "Новичок (стеснительный, неуверенный)",
+    whale: "Кит (платёжеспособный, ценит внимание)",
+    troll: "Тролль (провокатор, грубиян)",
+    freeloader: "Халявщик (ищет бесплатное, давит на жалость)",
+    greener_en: "Newbie (shy, uncertain)",
+    whale_en: "Whale (high spender, values attention)",
+    troll_en: "Troll (provocateur, rude)",
+    freeloader_en: "Freeloader (wants freebies, guilt-trips)",
+  }[archetype] ?? archetype;
+
   const prompt = isRu
-    ? `Ты — тренер операторов вебкам-чата. Проанализируй этот диалог между оператором и клиентом-${archetype}.
+    ? `Ты — строгий и честный тренер операторов вебкам-чата. Твоя задача — объективно оценить работу оператора по реальному диалогу.
 
-Диалог:
+ТЕМА ДИАЛОГА: оператор общается с клиентом типа "${archetypeName}"
+СООБЩЕНИЙ ОПЕРАТОРА: ${operatorMessages.length}
+СООБЩЕНИЙ КЛИЕНТА: ${memberMessages.length}
+
+ДИАЛОГ:
 ${conversationText}
 
-Дай оценку работе оператора:
-- score: число от 1 до 10
-- strengths: 1-2 предложения о сильных сторонах (на русском)
-- mistakes: 1-2 предложения об ошибках или зонах роста (на русском)
+КРИТЕРИИ ОЦЕНКИ (оцени каждый пункт мысленно):
+1. Вовлечённость — задавал ли оператор вопросы, проявлял ли искренний интерес?
+2. Тактика продаж — подводил ли к платному контенту, создавал ли ценность?
+3. Работа с типом клиента — учитывал ли поведение именно этого архетипа?
+4. Тон и стиль — был ли тёплым, живым, не роботизированным?
+5. Удержание — не давал ли клиенту уйти, поддерживал ли диалог?
 
-Ответь строго в JSON: {"score": N, "strengths": "...", "mistakes": "..."}`
-    : `You are a webcam chat operator coach. Analyze this conversation between an operator and a ${archetype} customer.
+ШКАЛА ОЦЕНОК:
+9-10 — отличная работа: тёплый тон, правильная тактика, клиент вовлечён и доволен
+7-8  — хорошая работа: большинство критериев выполнено, мелкие промахи
+5-6  — средне: оператор общается, но без стратегии, упускает возможности
+3-4  — слабо: короткие ответы, нет вовлечённости, клиент не чувствует интереса
+1-2  — очень плохо: грубость, игнор, провоцирование ухода
 
-Conversation:
+ВАЖНО: Не давай среднюю оценку "на всякий случай". Оценивай строго по тому, что видишь в диалоге. Если диалог короткий и слабый — ставь 3-4. Если оператор отлично работает — ставь 8-9. Будь конкретным.
+
+Ответь СТРОГО в JSON без лишнего текста:
+{"score": ЧИСЛО_ОТ_1_ДО_10, "strengths": "конкретное что сделано хорошо со ссылкой на диалог", "mistakes": "конкретные ошибки или что упущено"}`
+    : `You are a strict and honest webcam chat operator coach. Your task is to objectively evaluate the operator based on the real conversation.
+
+CLIENT TYPE: "${archetypeName}"
+OPERATOR MESSAGES: ${operatorMessages.length}
+CLIENT MESSAGES: ${memberMessages.length}
+
+CONVERSATION:
 ${conversationText}
 
-Rate the operator's performance:
-- score: number from 1 to 10
-- strengths: 1-2 sentences about strengths
-- mistakes: 1-2 sentences about mistakes or growth areas
+SCORING CRITERIA (evaluate each mentally):
+1. Engagement — did the operator ask questions, show genuine interest?
+2. Sales tactics — did they guide toward paid content, create value?
+3. Archetype handling — did they adapt to this specific client type?
+4. Tone & style — warm, natural, not robotic?
+5. Retention — kept the client engaged, prevented dropout?
 
-Reply strictly in JSON: {"score": N, "strengths": "...", "mistakes": "..."}`;
+SCORING SCALE:
+9-10 — excellent: warm tone, right tactics, client engaged and pleased
+7-8  — good: most criteria met, minor slips
+5-6  — average: communicating but no strategy, missing opportunities
+3-4  — weak: short replies, no engagement, client doesn't feel interest
+1-2  — very poor: rudeness, ignoring, driving the client away
+
+IMPORTANT: Do NOT default to a middle score. Score strictly based on what you see. Short weak dialogue = 3-4. Excellent work = 8-9. Be specific.
+
+Reply STRICTLY in JSON, no extra text:
+{"score": NUMBER_1_TO_10, "strengths": "specific good things with reference to the conversation", "mistakes": "specific mistakes or missed opportunities"}`;
 
   try {
     const response = await client.chat.completions.create({
       model: DEEPSEEK_MODEL,
       messages: [{ role: "user", content: prompt }],
-      max_tokens: 300,
-      temperature: 0.3,
+      max_tokens: 400,
+      temperature: 0.4,
     });
 
     const text = response.choices[0]?.message?.content ?? "{}";
