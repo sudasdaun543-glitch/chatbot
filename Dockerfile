@@ -1,7 +1,7 @@
-FROM node:24-alpine AS base
+FROM node:24-slim AS base
 RUN npm install -g pnpm@10
 
-# ---- Single build stage (saves memory vs two separate installs) ----
+# ---- Build stage ----
 FROM base AS builder
 WORKDIR /app
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
@@ -23,7 +23,7 @@ RUN pnpm --filter @workspace/chat-simulator run build
 RUN pnpm --filter @workspace/api-server run build
 
 # ---- Final image ----
-FROM node:24-alpine AS runner
+FROM node:24-slim AS runner
 WORKDIR /app
 RUN npm install -g pnpm@10
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
