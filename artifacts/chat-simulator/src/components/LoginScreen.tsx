@@ -40,37 +40,48 @@ export default function LoginScreen({ onLogin, onCoachPanel }: Props) {
 
   return (
     <div className="login-screen">
-      <h1 className="app-title">🤖 AI Chat Simulator</h1>
-      <p className="subtitle">Тренажёр для операторов вебкам-чата</p>
+      <div className="login-card">
+        <div className="brand-mark">
+          <div className="brand-dot" />
+          <div>
+            <div className="brand-name">Operator Trainer</div>
+            <div className="brand-sub">Тренажёр для операторов вебкам-чата</div>
+          </div>
+        </div>
 
-      <form className="login-form" onSubmit={handleLogin}>
-        <label htmlFor="email">Email</label>
-        <input
-          id="email"
-          type="email"
-          className="form-input"
-          placeholder="operator@example.com"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-          autoFocus
-          autoComplete="email"
-        />
+        <div className="login-divider" />
 
-        {error && <p className="error-message">❌ {error}</p>}
+        <form className="login-form" onSubmit={handleLogin}>
+          <div>
+            <label className="field-label" htmlFor="email">Email</label>
+            <input
+              id="email"
+              type="email"
+              className="form-input"
+              placeholder="operator@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              autoFocus
+              autoComplete="email"
+            />
+          </div>
 
-        <button
-          type="submit"
-          className="btn btn-start"
-          disabled={loading || !email.trim()}
-        >
-          {loading ? "Вход..." : "🔑 Войти"}
-        </button>
-      </form>
+          {error && <p className="error-message">{error}</p>}
 
-      <p className="coach-link" onClick={onCoachPanel}>
-        🛡 Панель Коуча
-      </p>
+          <button
+            type="submit"
+            className="btn btn-primary"
+            disabled={loading || !email.trim()}
+          >
+            {loading ? "Вход..." : "Войти"}
+          </button>
+        </form>
+
+        <span className="coach-link" onClick={onCoachPanel}>
+          Панель коуча
+        </span>
+      </div>
     </div>
   );
 }
