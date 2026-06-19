@@ -3,19 +3,30 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
-    <title>AI Chat Simulator</title>
-    <meta name="description" content="AI Chat Simulator — built on Replit. Update this description to reflect the app." />
-    <meta name="robots" content="index, follow" />
-    <meta property="og:title" content="AI Chat Simulator" />
-    <meta property="og:description" content="AI Chat Simulator — built on Replit. Update this description to reflect the app." />
-    <meta property="og:type" content="website" />
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="AI Chat Simulator" />
-    <meta name="twitter:description" content="AI Chat Simulator — built on Replit. Update this description to reflect the app." />
+    <title>Operator Trainer</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+      #replit-badge,
+      [class*="replit-badge"],
+      [id*="replit-badge"],
+      [data-replit-badge],
+      iframe[src*="replit.com/badge"],
+      a[href*="replit.com/badge"] { display: none !important; }
+    </style>
+    <script>
+      (function () {
+        function removeBadge() {
+          const sel = '#replit-badge, [id*="replit-badge"], [class*="replit-badge"], [data-replit-badge], iframe[src*="replit.com/badge"], a[href*="replit.com/badge"]';
+          document.querySelectorAll(sel).forEach(function (el) { el.remove(); });
+        }
+        removeBadge();
+        const obs = new MutationObserver(removeBadge);
+        obs.observe(document.documentElement, { childList: true, subtree: true });
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
