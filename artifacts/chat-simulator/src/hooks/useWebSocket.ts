@@ -6,6 +6,7 @@ type SendPayload = { type: string; content?: string };
 export function useWebSocket(sessionId: string) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isConnected, setIsConnected] = useState(false);
+  const [isTyping, setIsTyping] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
@@ -15,22 +16,25 @@ export function useWebSocket(sessionId: string) {
     wsRef.current = ws;
 
     ws.onopen = () => setIsConnected(true);
-    ws.onclose = () => setIsConnected(false);
-    ws.onerror = () => setIsConnected(false);
+    ws.onclose = () => { setIsConnected(false); setIsTyping(false); };
+    ws.onerror = () => { setIsConnected(false); setIsTyping(false); };
 
     ws.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data as string) as ChatMessage;
+        if (msg.type === "typing") {
+          setIsTyping(true);
+          return;
+        }
+        setIsTyping(false);
         const id = crypto.randomUUID();
         setMessages((prev) => [...prev, { ...msg, id }]);
       } catch {
-        // ignore malformed messages
+        // ignore malformed
       }
     };
 
-    return () => {
-      ws.close();
-    };
+    return () => { ws.close(); };
   }, [sessionId]);
 
   const send = useCallback((payload: SendPayload) => {
@@ -52,5 +56,5 @@ export function useWebSocket(sessionId: string) {
     }
   }, []);
 
-  return { messages, send, isConnected };
+  return { messages, send, isConnected, isTyping };
 }
