@@ -41,6 +41,10 @@ export default function LoginScreen({ onLogin, onCoachPanel }: Props) {
   return (
     <div className="login-screen">
       <div className="login-card">
+        <div className="login-bunny-wrap">
+          <img src="/bunny.png?v=2" alt="bunny" className="login-bunny" />
+        </div>
+
         <div className="brand-mark">
           <div className="brand-dot" />
           <div>
