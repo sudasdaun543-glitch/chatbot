@@ -15,7 +15,7 @@ export type ChatMessage = { role: "user" | "assistant" | "system"; content: stri
 const DEEPSEEK_BASE_URL  = "https://api.deepseek.com";
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 const DEEPSEEK_MODEL      = "deepseek-chat";
-const OPENROUTER_MODEL    = "deepseek/deepseek-chat";
+const OPENROUTER_MODEL    = "x-ai/grok-4";
 
 function resolveProvider(key: string): { baseURL: string; model: string } {
   if (key.startsWith("sk-or-")) {
