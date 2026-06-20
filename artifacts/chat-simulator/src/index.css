@@ -542,6 +542,15 @@ body {
 .message-row.left  { align-items: flex-start; }
 .message-row.center { align-items: center; }
 
+.msg-avatar {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  flex-shrink: 0;
+  align-self: flex-end;
+  filter: drop-shadow(0 0 6px rgba(204,34,34,0.5));
+}
+
 .bubble {
   max-width: 75%;
   padding: 0.55rem 0.8rem;
@@ -559,8 +568,6 @@ body {
 .member-bubble {
   background: var(--surface2);
   color: var(--text);
-  border: 1px solid var(--border);
-  border-left: 2px solid var(--border2);
 }
 
 .system-bubble {
@@ -598,8 +605,6 @@ body {
 /* ─── Typing indicator ─── */
 .typing-bubble {
   background: var(--surface2);
-  border: 1px solid var(--border);
-  border-left: 2px solid var(--border2);
   padding: 0.6rem 1rem;
   display: flex;
   align-items: center;
