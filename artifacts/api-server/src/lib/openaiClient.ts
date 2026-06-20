@@ -176,52 +176,64 @@ export async function generateAIFeedback(
     freeloader_en:"Freeloader (wants freebies, guilt-trips)",
   }[archetype] ?? archetype;
 
-  const prompt = isRu
-    ? `Ты — строгий и честный тренер операторов вебкам-чата. Объективно оцени работу оператора.
+  const systemInstruction = isRu
+    ? `Ты — строгий тренер операторов вебкам-чата. Твоя задача — честно оценить работу оператора ТОЛЬКО по реальному диалогу ниже.
 
-АРХЕТИП КЛИЕНТА: "${archetypeName}"
+ЖЁСТКИЕ ПРАВИЛА:
+- Ссылайся ТОЛЬКО на реальные фразы и действия из диалога. Цитируй конкретные сообщения.
+- КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО придумывать события, суммы, действия, которых нет в тексте диалога.
+- Если оператор что-то не сделал — пиши «не сделал X», не придумывай почему.
+- Не додумывай контекст за рамками написанного.
+- Давай реальную оценку: если оператор работал плохо — низкий балл, хорошо — высокий. Не «усредняй».`
+    : `You are a strict webcam chat operator coach. Evaluate the operator ONLY based on the real conversation below.
+
+STRICT RULES:
+- Reference ONLY real phrases and actions from the conversation. Quote specific messages.
+- NEVER invent events, amounts, or actions not present in the text.
+- If operator didn't do something — say "didn't do X", don't fabricate reasons.
+- Don't add context beyond what is written.
+- Give a real score: poor work = low score, good work = high score. Do not average out.`;
+
+  const userPrompt = isRu
+    ? `АРХЕТИП КЛИЕНТА: "${archetypeName}"
 СООБЩЕНИЙ ОПЕРАТОРА: ${operatorMessages.length}
 СООБЩЕНИЙ КЛИЕНТА: ${memberMessages.length}
 
-ДИАЛОГ:
+ДИАЛОГ (оценивай ТОЛЬКО это):
 ${conversationText}
 
-КРИТЕРИИ (оцени каждый):
-1. Вовлечённость — вопросы, искренний интерес?
-2. Тактика продаж — подводил к платному? создавал ценность?
-3. Работа с архетипом — учитывал поведение именно этого типа?
-4. Тон и стиль — тёплый, живой, не роботизированный?
-5. Удержание — поддерживал диалог, не давал уйти?
+КРИТЕРИИ:
+1. Вовлечённость — задавал вопросы, проявлял интерес?
+2. Тактика продаж — подводил к платному, создавал ценность?
+3. Работа с архетипом — учитывал особенности именно этого типа клиента?
+4. Тон и стиль — тёплый, живой?
+5. Удержание — поддерживал диалог?
 
-ШКАЛА:
-9-10 — отлично  7-8 — хорошо  5-6 — средне  3-4 — слабо  1-2 — очень плохо
+ШКАЛА: 9-10 отлично · 7-8 хорошо · 5-6 средне · 3-4 слабо · 1-2 очень плохо
 
-Не давай среднюю оценку «на всякий случай». Оценивай строго по диалогу.
-
-Ответь СТРОГО в JSON:
-{"score": ЧИСЛО, "strengths": "конкретно что хорошо", "mistakes": "конкретно что плохо или упущено"}`
-    : `You are a strict webcam chat operator coach. Objectively evaluate the operator.
-
-CLIENT TYPE: "${archetypeName}"
+Ответь СТРОГО в JSON (без markdown, без \`\`\`):
+{"score": ЧИСЛО_ОТ_1_ДО_10, "strengths": "конкретные плюсы со ссылками на диалог", "mistakes": "конкретные минусы со ссылками на диалог"}`
+    : `CLIENT TYPE: "${archetypeName}"
 OPERATOR MESSAGES: ${operatorMessages.length} | CLIENT MESSAGES: ${memberMessages.length}
 
-CONVERSATION:
+CONVERSATION (evaluate ONLY this):
 ${conversationText}
 
 CRITERIA: engagement, sales tactics, archetype handling, tone, retention.
 SCALE: 9-10 excellent · 7-8 good · 5-6 average · 3-4 weak · 1-2 very poor
 
-Do NOT default to middle score. Score strictly from the actual conversation.
-
-Reply STRICTLY in JSON:
-{"score": NUMBER, "strengths": "specific good things", "mistakes": "specific mistakes or missed opportunities"}`;
+Reply STRICTLY in JSON (no markdown, no \`\`\`):
+{"score": NUMBER_1_TO_10, "strengths": "specific positives referencing the conversation", "mistakes": "specific negatives referencing the conversation"}`;
 
   try {
     const response = await client.chat.completions.create({
       model,
-      messages: [{ role: "user", content: prompt }],
-      max_tokens: 400,
-      temperature: 0.3,
+      messages: [
+        { role: "system", content: systemInstruction },
+        { role: "user",   content: userPrompt },
+      ],
+      max_tokens: 500,
+      temperature: 0.2,
     });
 
     const text      = response.choices[0]?.message?.content ?? "{}";
