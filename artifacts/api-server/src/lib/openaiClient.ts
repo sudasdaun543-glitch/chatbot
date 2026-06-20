@@ -12,13 +12,23 @@ export type Archetype =
 
 export type ChatMessage = { role: "user" | "assistant" | "system"; content: string };
 
-const DEEPSEEK_BASE_URL = "https://api.deepseek.com";
-const DEEPSEEK_MODEL    = "deepseek-chat";
+const DEEPSEEK_BASE_URL  = "https://api.deepseek.com";
+const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
+const DEEPSEEK_MODEL      = "deepseek-chat";
+const OPENROUTER_MODEL    = "deepseek/deepseek-chat";
 
-function createClient(): OpenAI | null {
+function resolveProvider(key: string): { baseURL: string; model: string } {
+  if (key.startsWith("sk-or-")) {
+    return { baseURL: OPENROUTER_BASE_URL, model: OPENROUTER_MODEL };
+  }
+  return { baseURL: DEEPSEEK_BASE_URL, model: DEEPSEEK_MODEL };
+}
+
+function createClient(): { client: OpenAI; model: string } | null {
   const key = process.env.OPENAI_API_KEY1 ?? process.env.OPENAI_API_KEY;
   if (!key) return null;
-  return new OpenAI({ apiKey: key, baseURL: DEEPSEEK_BASE_URL });
+  const { baseURL, model } = resolveProvider(key);
+  return { client: new OpenAI({ apiKey: key, baseURL }), model };
 }
 
 export function hasOpenAI(): boolean {
@@ -99,8 +109,9 @@ export async function getAIReply(
   stateHint?: string,
   learningExamples?: string[],
 ): Promise<string> {
-  const client = createClient();
-  if (!client) return "...";
+  const ctx = createClient();
+  if (!ctx) return "...";
+  const { client, model } = ctx;
 
   const basePrompt   = BASE_PROMPTS[archetype] ?? BASE_PROMPTS["greener"];
   const isRu         = !archetype.endsWith("_en");
@@ -123,7 +134,7 @@ export async function getAIReply(
   ];
 
   const response = await client.chat.completions.create({
-    model: DEEPSEEK_MODEL,
+    model,
     messages,
     max_tokens: 150,
     temperature: 0.9,
@@ -136,8 +147,8 @@ export async function generateAIFeedback(
   archetype: Archetype,
   history: ChatMessage[],
 ): Promise<{ score: number; strengths: string; mistakes: string }> {
-  const client = createClient();
-  const isRu   = !archetype.endsWith("_en");
+  const ctx   = createClient();
+  const isRu  = !archetype.endsWith("_en");
 
   const fallback = {
     score:     5,
@@ -145,7 +156,8 @@ export async function generateAIFeedback(
     mistakes:  isRu ? "Слишком мало сообщений для полного анализа" : "Too few messages for full analysis",
   };
 
-  if (!client || history.length < 2) return fallback;
+  if (!ctx || history.length < 2) return fallback;
+  const { client, model } = ctx;
 
   const operatorMessages = history.filter(m => m.role === "user");
   const memberMessages   = history.filter(m => m.role === "assistant");
@@ -206,7 +218,7 @@ Reply STRICTLY in JSON:
 
   try {
     const response = await client.chat.completions.create({
-      model: DEEPSEEK_MODEL,
+      model,
       messages: [{ role: "user", content: prompt }],
       max_tokens: 400,
       temperature: 0.3,
