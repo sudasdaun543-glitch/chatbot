@@ -74,7 +74,6 @@ body {
 .login-card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-top: 2px solid var(--accent);
   border-radius: 0;
   padding: 2.5rem 2rem;
   width: 100%;
@@ -82,7 +81,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.5), inset 4px 0 0 var(--accent);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
 }
 
 .brand-mark {
