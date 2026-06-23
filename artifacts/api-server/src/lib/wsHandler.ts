@@ -114,6 +114,110 @@ async function saveLearningExample(archetype: Archetype, history: ChatMessage[],
   }
 }
 
+const OPENING_MESSAGES: Record<string, string[]> = {
+  greener: [
+    "хай)",
+    "ку",
+    "привет)",
+    "о, привет",
+    "хм)",
+    "хай хай",
+    "о, тут живые есть?",
+    "привет, ты настоящая?",
+    "здарова",
+    "ого)",
+  ],
+  whale: [
+    "привет красотка)",
+    "хай, солнышко)",
+    "о, привет красавица",
+    "хай)",
+    "привет, заглянул)",
+    "о, кто тут у нас)",
+    "хай, давно не был)",
+    "привет милая)",
+    "ооо, хороша)",
+    "привет звёздочка)",
+  ],
+  troll: [
+    "ну и чо",
+    "хм",
+    "ага",
+    "ну привет что ли",
+    "смотрим смотрим",
+    "ну давай",
+    "ок",
+    "чо как",
+    "занятно",
+    "посмотрим посмотрим",
+  ],
+  freeloader: [
+    "привет)",
+    "хай",
+    "ку, ты добрая?)",
+    "привет, как дела?",
+    "хай, ты хорошая?)",
+    "о привет)",
+    "здравствуй)",
+    "привет, ты добрая девушка?",
+    "хай хай)",
+    "привет, зашёл посмотреть)",
+  ],
+  greener_en: [
+    "hey)",
+    "hi)",
+    "heyy",
+    "oh hi)",
+    "hey there)",
+    "oh, you're live)",
+    "hii",
+    "hey, real person?)",
+    "oh hey)",
+    "hi hi)",
+  ],
+  whale_en: [
+    "hey gorgeous)",
+    "hi sweetie)",
+    "oh hey beautiful)",
+    "hey darling)",
+    "hi there, pretty)",
+    "oh, hello)",
+    "heyy)",
+    "hi princess)",
+    "oh gorgeous)",
+    "hey lovely)",
+  ],
+  troll_en: [
+    "hmm",
+    "ok",
+    "yeah",
+    "so",
+    "lol hi",
+    "whatever",
+    "uh hi",
+    "sure sure",
+    "ok then",
+    "interesting",
+  ],
+  freeloader_en: [
+    "hey)",
+    "hi there)",
+    "heyy)",
+    "oh hey)",
+    "hi, you nice?)",
+    "hello)",
+    "hey, you kind?)",
+    "hi hi)",
+    "hii)",
+    "hey, came to watch)",
+  ],
+};
+
+function pickOpeningMessage(archetype: string): string {
+  const pool = OPENING_MESSAGES[archetype] ?? OPENING_MESSAGES["greener"];
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
 export function attachWebSocketServer(server: Server): void {
   const wss = new WebSocketServer({ noServer: true });
 
@@ -165,19 +269,16 @@ export function attachWebSocketServer(server: Server): void {
       action: null, feedback: null,
     }));
 
-    // AI sends the opening message first (client enters chat)
-    if (hasOpenAI() && ws.readyState === WebSocket.OPEN) {
-      try {
-        ws.send(JSON.stringify({ type: "typing", role: "assistant", content: "", action: null, feedback: null }));
-        const openingReply = await getAIReply(archetype, [], "opening", "neutral", learningExamplesReady);
-        const history = sessionHistories.get(sessionId) ?? [];
-        history.push({ role: "assistant", content: openingReply });
-        sessionHistories.set(sessionId, history);
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: "message", role: "assistant", content: openingReply, action: null, feedback: null }));
-        }
-      } catch (err) {
-        logger.warn({ err }, "Failed to generate AI opening message");
+    // AI sends the opening message first (client enters chat) — picked from a random pool
+    if (ws.readyState === WebSocket.OPEN) {
+      const openingReply = pickOpeningMessage(archetype);
+      const history = sessionHistories.get(sessionId) ?? [];
+      history.push({ role: "assistant", content: openingReply });
+      sessionHistories.set(sessionId, history);
+      // small delay so the system message renders first
+      await new Promise(r => setTimeout(r, 400));
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: "message", role: "assistant", content: openingReply, action: null, feedback: null }));
       }
     }
 
