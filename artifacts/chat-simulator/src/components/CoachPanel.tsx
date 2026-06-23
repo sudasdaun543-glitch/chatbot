@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import type { OperatorInfo, SessionWithResult } from "../types";
 
 interface Props {
@@ -7,6 +7,7 @@ interface Props {
 }
 
 type Tab = "operators" | "sessions";
+type SortOrder = "asc" | "desc" | null;
 
 const ARCHETYPE_LABELS: Record<string, string> = {
   greener: "🌱 Новичок",
@@ -36,6 +37,12 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+function SortIcon({ order }: { order: SortOrder }) {
+  if (order === "asc")  return <span style={{ marginLeft: 4 }}>↑</span>;
+  if (order === "desc") return <span style={{ marginLeft: 4 }}>↓</span>;
+  return <span style={{ marginLeft: 4, opacity: 0.4 }}>↕</span>;
+}
+
 export default function CoachPanel({ onBack, onDevPanel }: Props) {
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
@@ -45,6 +52,7 @@ export default function CoachPanel({ onBack, onDevPanel }: Props) {
   const [sessions, setSessions] = useState<SessionWithResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>("operators");
+  const [sortOrder, setSortOrder] = useState<SortOrder>(null);
 
   const handleCodeSubmit = async () => {
     if (!login.trim() || !password.trim()) return;
@@ -109,6 +117,34 @@ export default function CoachPanel({ onBack, onDevPanel }: Props) {
     if (tab === "operators") loadOperators();
     else loadSessions();
   };
+
+  const toggleSort = () => {
+    setSortOrder(prev => {
+      if (prev === null)   return "desc";
+      if (prev === "desc") return "asc";
+      return null;
+    });
+  };
+
+  const scoredSessions = useMemo(
+    () => sessions.filter(s => s.score !== null),
+    [sessions],
+  );
+
+  const totalScore   = useMemo(() => scoredSessions.reduce((sum, s) => sum + (s.score ?? 0), 0), [scoredSessions]);
+  const averageScore = useMemo(
+    () => scoredSessions.length > 0 ? (totalScore / scoredSessions.length).toFixed(1) : "—",
+    [totalScore, scoredSessions],
+  );
+
+  const sortedSessions = useMemo(() => {
+    if (!sortOrder) return sessions;
+    return [...sessions].sort((a, b) => {
+      const sa = a.score ?? -1;
+      const sb = b.score ?? -1;
+      return sortOrder === "asc" ? sa - sb : sb - sa;
+    });
+  }, [sessions, sortOrder]);
 
   const exportCsv = () => {
     const ARCHETYPE_LABELS_CSV: Record<string, string> = {
@@ -266,52 +302,125 @@ export default function CoachPanel({ onBack, onDevPanel }: Props) {
       )}
 
       {activeTab === "sessions" && (
-        <div className="coach-table-wrap">
-          <table className="coach-table">
-            <thead>
-              <tr>
-                <th>Оператор</th>
-                <th>Архетип</th>
-                <th>Статус</th>
-                <th>Оценка</th>
-                <th>Сильные стороны</th>
-                <th>Ошибки</th>
-                <th>Дата</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sessions.length === 0 && !loading && (
+        <>
+          {sessions.length > 0 && (
+            <div
+              style={{
+                display: "flex",
+                gap: 24,
+                padding: "12px 16px",
+                margin: "12px 0 4px",
+                background: "rgba(255,255,255,0.04)",
+                borderRadius: 10,
+                border: "1px solid rgba(255,255,255,0.08)",
+                flexWrap: "wrap",
+              }}
+            >
+              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <span style={{ fontSize: "0.72rem", color: "#888", textTransform: "uppercase", letterSpacing: 1 }}>
+                  Всего сессий
+                </span>
+                <span style={{ fontSize: "1.25rem", fontWeight: 700, color: "#e2e8f0" }}>
+                  {sessions.length}
+                </span>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <span style={{ fontSize: "0.72rem", color: "#888", textTransform: "uppercase", letterSpacing: 1 }}>
+                  Оценённых сессий
+                </span>
+                <span style={{ fontSize: "1.25rem", fontWeight: 700, color: "#e2e8f0" }}>
+                  {scoredSessions.length}
+                </span>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <span style={{ fontSize: "0.72rem", color: "#888", textTransform: "uppercase", letterSpacing: 1 }}>
+                  Общий балл (сумма)
+                </span>
+                <span
+                  style={{
+                    fontSize: "1.25rem",
+                    fontWeight: 700,
+                    color: totalScore >= scoredSessions.length * 7 ? "#4ade80"
+                         : totalScore >= scoredSessions.length * 4 ? "#facc15"
+                         : "#f87171",
+                  }}
+                >
+                  {totalScore}
+                </span>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <span style={{ fontSize: "0.72rem", color: "#888", textTransform: "uppercase", letterSpacing: 1 }}>
+                  Средний балл
+                </span>
+                <span
+                  style={{
+                    fontSize: "1.25rem",
+                    fontWeight: 700,
+                    color: Number(averageScore) >= 7 ? "#4ade80"
+                         : Number(averageScore) >= 4 ? "#facc15"
+                         : "#f87171",
+                  }}
+                >
+                  {averageScore}
+                  {averageScore !== "—" && <span style={{ fontSize: "0.85rem", color: "#888" }}>/10</span>}
+                </span>
+              </div>
+            </div>
+          )}
+
+          <div className="coach-table-wrap">
+            <table className="coach-table">
+              <thead>
                 <tr>
-                  <td colSpan={7} style={{ textAlign: "center", padding: "24px", color: "#666" }}>
-                    Нет сессий
-                  </td>
+                  <th>Оператор</th>
+                  <th>Архетип</th>
+                  <th>Статус</th>
+                  <th
+                    onClick={toggleSort}
+                    style={{ cursor: "pointer", userSelect: "none", whiteSpace: "nowrap" }}
+                    title="Нажмите для сортировки по баллу"
+                  >
+                    Оценка <SortIcon order={sortOrder} />
+                  </th>
+                  <th>Сильные стороны</th>
+                  <th>Ошибки</th>
+                  <th>Дата</th>
                 </tr>
-              )}
-              {sessions.map((s) => (
-                <tr key={s.id}>
-                  <td>
-                    <div style={{ fontWeight: 600, fontSize: "0.85rem" }}>
-                      {s.operator_email || s.operator_name || "—"}
-                    </div>
-                    <div className="uid-cell" style={{ marginTop: 2 }}>{s.operator_id ?? "—"}</div>
-                  </td>
-                  <td>{ARCHETYPE_LABELS[s.archetype] ?? s.archetype}</td>
-                  <td><StatusBadge status={s.status} /></td>
-                  <td><ScoreBadge score={s.score} /></td>
-                  <td style={{ maxWidth: 200, fontSize: "0.82rem", color: "#4ade80" }}>
-                    {s.strengths ?? <span style={{ color: "#666" }}>—</span>}
-                  </td>
-                  <td style={{ maxWidth: 200, fontSize: "0.82rem", color: "#f3a0c9" }}>
-                    {s.mistakes ?? <span style={{ color: "#666" }}>—</span>}
-                  </td>
-                  <td style={{ fontSize: "0.78rem", color: "#666", whiteSpace: "nowrap" }}>
-                    {new Date(s.created_at).toLocaleString("ru")}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {sortedSessions.length === 0 && !loading && (
+                  <tr>
+                    <td colSpan={7} style={{ textAlign: "center", padding: "24px", color: "#666" }}>
+                      Нет сессий
+                    </td>
+                  </tr>
+                )}
+                {sortedSessions.map((s) => (
+                  <tr key={s.id}>
+                    <td>
+                      <div style={{ fontWeight: 600, fontSize: "0.85rem" }}>
+                        {s.operator_email || s.operator_name || "—"}
+                      </div>
+                      <div className="uid-cell" style={{ marginTop: 2 }}>{s.operator_id ?? "—"}</div>
+                    </td>
+                    <td>{ARCHETYPE_LABELS[s.archetype] ?? s.archetype}</td>
+                    <td><StatusBadge status={s.status} /></td>
+                    <td><ScoreBadge score={s.score} /></td>
+                    <td style={{ maxWidth: 200, fontSize: "0.82rem", color: "#4ade80" }}>
+                      {s.strengths ?? <span style={{ color: "#666" }}>—</span>}
+                    </td>
+                    <td style={{ maxWidth: 200, fontSize: "0.82rem", color: "#f3a0c9" }}>
+                      {s.mistakes ?? <span style={{ color: "#666" }}>—</span>}
+                    </td>
+                    <td style={{ fontSize: "0.78rem", color: "#666", whiteSpace: "nowrap" }}>
+                      {new Date(s.created_at).toLocaleString("ru")}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
 
       <div className="coach-actions">
