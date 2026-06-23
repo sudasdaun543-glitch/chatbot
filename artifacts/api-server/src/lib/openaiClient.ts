@@ -349,8 +349,12 @@ export async function generateAIFeedback(
   const ctx   = createClient();
   const isRu  = !archetype.endsWith("_en");
 
+  const FEW_MSG_THRESHOLD = 4; // operator messages needed for a real score
+  const operatorMsgCount  = history.filter(m => m.role === "user").length;
+  const tooFew            = operatorMsgCount < FEW_MSG_THRESHOLD;
+
   const fallback = {
-    score:     5,
+    score:     tooFew ? 2 : 5,
     strengths: isRu ? "Начало положено" : "Getting started",
     mistakes:  isRu ? "Слишком мало сообщений для полного анализа" : "Too few messages for full analysis",
   };
@@ -439,10 +443,13 @@ Reply STRICTLY in JSON (no markdown, no \`\`\`):
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       const parsed = JSON.parse(jsonMatch[0]) as { score?: number; strengths?: string; mistakes?: string };
+      const rawScore = Math.min(10, Math.max(1, Math.round(parsed.score ?? 5)));
       return {
-        score:     Math.min(10, Math.max(1, Math.round(parsed.score ?? 5))),
+        score:     tooFew ? Math.min(rawScore, 2) : rawScore,
         strengths: parsed.strengths ?? fallback.strengths,
-        mistakes:  parsed.mistakes  ?? fallback.mistakes,
+        mistakes:  tooFew
+          ? (isRu ? "Слишком мало сообщений для полной оценки" : "Too few messages for a full score")
+          : (parsed.mistakes ?? fallback.mistakes),
       };
     }
   } catch (_err) {
