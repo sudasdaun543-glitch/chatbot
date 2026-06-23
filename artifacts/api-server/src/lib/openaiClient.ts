@@ -321,7 +321,8 @@ export async function getAIReply(
     temperature: 1.0,
   });
 
-  return response.choices[0]?.message?.content?.trim() || (isRu ? "хм" : "hmm");
+  const raw = response.choices[0]?.message?.content ?? "";
+  return raw.replace(/\n+/g, " ").trim() || (isRu ? "хм" : "hmm");
 }
 
 export async function generateAIFeedback(
