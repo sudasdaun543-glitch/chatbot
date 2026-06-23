@@ -320,7 +320,7 @@ export function attachWebSocketServer(server: Server): void {
 
               logger.info({ sessionId, phase, operatorQuality, totalMessages: state.totalMessages }, "AI reply context");
 
-              replyText = await getAIReply(archetype, history, phase, operatorQuality, learningExamples);
+              replyText = (await getAIReply(archetype, history, phase, operatorQuality, learningExamples)).replace(/\n+/g, " ").trim();
 
               const isWhale = archetype === "whale" || archetype === "whale_en";
               if (isWhale && state.totalMessages >= 6 && operatorQuality === "warm" && Math.random() < 0.35) {
