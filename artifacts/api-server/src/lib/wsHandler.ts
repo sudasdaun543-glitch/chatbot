@@ -4,57 +4,83 @@ import type { Server } from "http";
 import { db, sessionsTable, feedbackTable, learningExamplesTable } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
 import crypto from "crypto";
-import { hasOpenAI, getAIReply, generateAIFeedback, type Archetype, type ChatMessage } from "./openaiClient.js";
+import {
+  hasOpenAI, getAIReply, generateAIFeedback,
+  type Archetype, type ChatMessage, type ConversationPhase,
+} from "./openaiClient.js";
 import { getNextReply, generateFeedback, cleanupSession } from "./mockAI.js";
 import { logger } from "./logger.js";
 
-const sessionHistories      = new Map<string, ChatMessage[]>();
-const sessionLearningCache  = new Map<string, string[]>();
+const sessionHistories     = new Map<string, ChatMessage[]>();
+const sessionLearningCache = new Map<string, string[]>();
 
 interface ConvState {
-  warmCount: number;
-  coldCount: number;
-  total: number;
+  totalMessages: number;
+  warmStreak:    number;
+  coldStreak:    number;
+  contentAsked:  boolean;
+  personalAsked: boolean;
+  actionTaken:   boolean;
 }
+
 const sessionStates = new Map<string, ConvState>();
 
+const CONTENT_PATTERN = /приват|привате|покаж|раздев|голая|голый|ценник|стоит|сколько|купить|private|pvt|topless|naked|nude|price|how much|fully|panties|pussy|boobs|butt|pic\b|show me/i;
+const PERSONAL_PATTERN = /сколько лет|откуда|возраст|как тебя|твоё имя|давно ли|how old|where are you from|your name|how long|age|country|city/i;
+const WARM_PATTERN    = /привет|хай|как дела|интересно|расскаж|нравится|классно|супер|отлично|люблю|скучаю|hello|hi\b|how are|nice|great|love|miss|awesome|wow|tell me|curious|pretty|beautiful|gorgeous|sweetie|darling|princess/i;
+const COLD_PATTERN    = /^.{1,3}$|^(ок|да|нет|ну|ok|yes|no|k|yep|nope|sure|fine)\.?$/i;
+const ACTION_PATTERN  = /оплат|заплат|куплю|беру|в приват|paid|pay|bought|private now|tip|чаевые/i;
+
 function analyzeOperatorMessage(content: string): "warm" | "cold" | "neutral" {
-  const warmPattern = /привет|хай|как|дела|интерес|расскаж|нравит|хорош|класс|супер|отлич|люб|скуч|hello|hi|how are|nice|great|love|miss|awesome|wow|tell me|curious/i;
-  const coldPattern = /^.{1,4}$|^(ок|да|нет|ну|ok|yes|no|k|yep|nope|sure)\.?$/i;
-  if (warmPattern.test(content)) return "warm";
-  if (coldPattern.test(content.trim())) return "cold";
+  if (WARM_PATTERN.test(content)) return "warm";
+  if (COLD_PATTERN.test(content.trim())) return "cold";
   return "neutral";
 }
 
-function buildStateHint(state: ConvState, archetype: Archetype): string {
-  const { warmCount, coldCount, total } = state;
-  if (total < 2) return "";
-  const warmRatio = warmCount / total;
-  const coldRatio = coldCount / total;
-  const isRu  = !archetype.endsWith("_en");
-  const base  = archetype.replace("_en", "") as "greener" | "whale" | "troll" | "freeloader";
+function detectPhase(state: ConvState, history: ChatMessage[]): ConversationPhase {
+  const { totalMessages, contentAsked, personalAsked, actionTaken } = state;
 
-  if (warmRatio >= 0.6) {
-    const hints: Record<string, string> = {
-      greener:   isRu ? "[Состояние: оператор тёплый. Ты расслабился(-лась), начинаешь открываться.]" : "[State: operator warm. You relax and start opening up.]",
-      whale:     isRu ? "[Состояние: оператор работает хорошо. Готов(-а) тратить больше.]" : "[State: operator doing well. You're ready to spend more.]",
-      troll:     isRu ? "[Состояние: оператор держится спокойно. Ты немного смягчаешься.]" : "[State: operator stays calm. You soften slightly.]",
-      freeloader:isRu ? "[Состояние: оператор уверен. Ты ищешь новые подходы.]" : "[State: operator holds firm. You try new angles.]",
-    };
-    return hints[base] ?? "";
+  if (totalMessages <= 1) return "opening";
+  if (actionTaken)        return "post_action";
+
+  if (totalMessages >= 12) return "exit";
+
+  if (contentAsked && personalAsked) return "negotiation";
+  if (contentAsked) return "personal_connect";
+  if (totalMessages >= 4 && !contentAsked) return "content_inquiry";
+
+  const lastOperator = [...history].reverse().find(m => m.role === "user");
+  if (lastOperator) {
+    if (CONTENT_PATTERN.test(lastOperator.content)) return "content_inquiry";
+    if (PERSONAL_PATTERN.test(lastOperator.content)) return "personal_connect";
   }
 
-  if (coldRatio >= 0.6) {
-    const hints: Record<string, string> = {
-      greener:   isRu ? "[Состояние: оператор холодный. Ты снова замыкаешься.]" : "[State: operator cold. You withdraw.]",
-      whale:     isRu ? "[Состояние: оператор не вовлекает. Ты теряешь интерес.]" : "[State: operator not engaging. You lose interest.]",
-      troll:     isRu ? "[Состояние: оператор скучный. Усиливаешь провокации.]" : "[State: operator boring. You escalate trolling.]",
-      freeloader:isRu ? "[Состояние: оператор не реагирует. Давишь на жалость сильнее.]" : "[State: operator distracted. You guilt-trip harder.]",
-    };
-    return hints[base] ?? "";
+  return "opening";
+}
+
+function updateState(state: ConvState, operatorMessage: string, quality: "warm" | "cold" | "neutral"): void {
+  state.totalMessages += 1;
+
+  if (quality === "warm") {
+    state.warmStreak += 1;
+    state.coldStreak  = 0;
+  } else if (quality === "cold") {
+    state.coldStreak += 1;
+    state.warmStreak  = 0;
+  } else {
+    state.warmStreak  = 0;
+    state.coldStreak  = 0;
   }
 
-  return "";
+  if (CONTENT_PATTERN.test(operatorMessage))  state.contentAsked  = true;
+  if (PERSONAL_PATTERN.test(operatorMessage)) state.personalAsked = true;
+  if (ACTION_PATTERN.test(operatorMessage))   state.actionTaken   = true;
+}
+
+function resolveOperatorQuality(state: ConvState): "warm" | "cold" | "neutral" {
+  if (state.warmStreak >= 2) return "warm";
+  if (state.coldStreak >= 2) return "cold";
+  return "neutral";
 }
 
 async function fetchLearningExamples(archetype: Archetype): Promise<string[]> {
@@ -110,13 +136,19 @@ export function attachWebSocketServer(server: Server): void {
       ws.close();
       return;
     }
-    const session  = rows[0];
+    const session   = rows[0];
     const archetype = session.archetype as Archetype;
 
     sessionHistories.set(sessionId, []);
-    sessionStates.set(sessionId, { warmCount: 0, coldCount: 0, total: 0 });
+    sessionStates.set(sessionId, {
+      totalMessages: 0,
+      warmStreak:    0,
+      coldStreak:    0,
+      contentAsked:  false,
+      personalAsked: false,
+      actionTaken:   false,
+    });
 
-    // Pre-fetch learning examples for this archetype (non-blocking)
     if (hasOpenAI()) {
       fetchLearningExamples(archetype)
         .then(examples => { sessionLearningCache.set(sessionId, examples); })
@@ -141,12 +173,13 @@ export function attachWebSocketServer(server: Server): void {
 
           if (msg.type === "message" && msg.content) {
             const history = sessionHistories.get(sessionId) ?? [];
-            const state   = sessionStates.get(sessionId) ?? { warmCount: 0, coldCount: 0, total: 0 };
+            const state   = sessionStates.get(sessionId) ?? {
+              totalMessages: 0, warmStreak: 0, coldStreak: 0,
+              contentAsked: false, personalAsked: false, actionTaken: false,
+            };
 
-            const sentiment = analyzeOperatorMessage(msg.content);
-            state.total += 1;
-            if (sentiment === "warm") state.warmCount += 1;
-            if (sentiment === "cold") state.coldCount += 1;
+            const quality = analyzeOperatorMessage(msg.content);
+            updateState(state, msg.content, quality);
             sessionStates.set(sessionId, state);
 
             history.push({ role: "user", content: msg.content });
@@ -160,11 +193,16 @@ export function attachWebSocketServer(server: Server): void {
             let tipAction: { type: string; amount: number } | null = null;
 
             if (hasOpenAI()) {
-              const stateHint       = buildStateHint(state, archetype);
+              const phase           = detectPhase(state, history);
+              const operatorQuality = resolveOperatorQuality(state);
               const learningExamples = sessionLearningCache.get(sessionId) ?? [];
-              replyText = await getAIReply(archetype, history, stateHint || undefined, learningExamples);
+
+              logger.info({ sessionId, phase, operatorQuality, totalMessages: state.totalMessages }, "AI reply context");
+
+              replyText = await getAIReply(archetype, history, phase, operatorQuality, learningExamples);
+
               const isWhale = archetype === "whale" || archetype === "whale_en";
-              if (isWhale && history.length >= 6 && Math.random() < 0.3) {
+              if (isWhale && state.totalMessages >= 6 && operatorQuality === "warm" && Math.random() < 0.35) {
                 tipAction = { type: "send_tips", amount: Math.floor(Math.random() * 80 + 20) };
               }
             } else {
@@ -235,7 +273,6 @@ async function handleClose(ws: WebSocket, sessionId: string, archetype: Archetyp
     logger.error({ err }, "Failed to save session feedback");
   }
 
-  // Save successful conversations so the AI can learn from them
   void saveLearningExample(archetype, history, feedback.score);
 
   ws.send(JSON.stringify({
