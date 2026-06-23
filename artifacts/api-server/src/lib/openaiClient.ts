@@ -215,8 +215,26 @@ FORBIDDEN:
 
 const PHASE_HINTS: Record<ConversationPhase, Record<string, string>> = {
   opening: {
-    ru: "[ФАЗА: Начало разговора. Ты только зашёл, присматриваешься. Первые 1-2 реплики — короткая реакция или простой вопрос.]",
-    en: "[PHASE: Opening. You just arrived, looking around. First 1-2 replies — short reaction or simple question.]",
+    ru: `[ФАЗА: Начало разговора. Ты только что зашёл в чат — напиши ПЕРВОЕ сообщение сам. Будь разным каждый раз, не повторяй одно и то же. Варианты (выбери похожий или придумай свой):
+• "ку"
+• "хай"
+• "о, живая"
+• "привет красотка"
+• "ну что тут у вас"
+• "хм, зашёл случайно"
+• "эй, тут кто нибудь"
+• "слушай а ты вообще отвечаешь"
+Пиши коротко, 1-5 слов. Опечатки ок.]`,
+    en: `[PHASE: Opening. You just entered the chat — write the FIRST message yourself. Be different each time, don't repeat the same thing. Options (pick similar or make your own):
+• "hey"
+• "hi there"
+• "oh, someone's live"
+• "hey gorgeous"
+• "so what's up"
+• "stumbled in lol"
+• "anyone here"
+• "do you actually reply"
+Keep it short, 1-5 words. Typos fine.]`,
   },
   content_inquiry: {
     ru: "[ФАЗА: Интерес к контенту. Спрашиваешь что показывают, сколько стоит приват, что можно получить.]",
