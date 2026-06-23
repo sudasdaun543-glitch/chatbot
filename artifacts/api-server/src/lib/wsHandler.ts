@@ -149,10 +149,14 @@ export function attachWebSocketServer(server: Server): void {
       actionTaken:   false,
     });
 
+    let learningExamplesReady: string[] = [];
     if (hasOpenAI()) {
-      fetchLearningExamples(archetype)
-        .then(examples => { sessionLearningCache.set(sessionId, examples); })
-        .catch(() => { sessionLearningCache.set(sessionId, []); });
+      try {
+        learningExamplesReady = await fetchLearningExamples(archetype);
+      } catch {
+        learningExamplesReady = [];
+      }
+      sessionLearningCache.set(sessionId, learningExamplesReady);
     }
 
     ws.send(JSON.stringify({
@@ -160,6 +164,22 @@ export function attachWebSocketServer(server: Server): void {
       content: `Сессия начата. Архетип: ${archetype}. Начните диалог!`,
       action: null, feedback: null,
     }));
+
+    // AI sends the opening message first (client enters chat)
+    if (hasOpenAI() && ws.readyState === WebSocket.OPEN) {
+      try {
+        ws.send(JSON.stringify({ type: "typing", role: "assistant", content: "", action: null, feedback: null }));
+        const openingReply = await getAIReply(archetype, [], "opening", "neutral", learningExamplesReady);
+        const history = sessionHistories.get(sessionId) ?? [];
+        history.push({ role: "assistant", content: openingReply });
+        sessionHistories.set(sessionId, history);
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: "message", role: "assistant", content: openingReply, action: null, feedback: null }));
+        }
+      } catch (err) {
+        logger.warn({ err }, "Failed to generate AI opening message");
+      }
+    }
 
     ws.on("message", (raw) => {
       void (async () => {
