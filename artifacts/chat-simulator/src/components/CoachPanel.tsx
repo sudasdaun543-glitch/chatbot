@@ -6,7 +6,7 @@ interface Props {
   onDevPanel: () => void;
 }
 
-type Tab = "operators" | "sessions";
+type Tab = "operators" | "sessions" | "leaderboard";
 type SortOrder = "asc" | "desc" | null;
 
 const ARCHETYPE_LABELS: Record<string, string> = {
@@ -53,13 +53,14 @@ function SortIcon({ order }: { order: SortOrder }) {
 }
 
 export default function CoachPanel({ onBack, onDevPanel }: Props) {
-  const [login, setLogin] = useState("");
+  const [login, setLogin]       = useState("");
   const [password, setPassword] = useState("");
-  const [granted, setGranted] = useState(false);
+  const [granted, setGranted]   = useState(false);
   const [codeError, setCodeError] = useState<string | null>(null);
   const [operators, setOperators] = useState<OperatorInfo[]>([]);
-  const [sessions, setSessions] = useState<SessionWithResult[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [sessions, setSessions]   = useState<SessionWithResult[]>([]);
+  const [loading, setLoading]     = useState(false);
+  const [clearing, setClearing]   = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>("operators");
   const [sortOrder, setSortOrder] = useState<SortOrder>(null);
 
@@ -87,20 +88,16 @@ export default function CoachPanel({ onBack, onDevPanel }: Props) {
     setLoading(true);
     try {
       const resp = await fetch("/api/coach/operators");
-      const data: OperatorInfo[] = await resp.json();
-      setOperators(data);
-    } catch { /* ignore */ }
-    finally { setLoading(false); }
+      setOperators(await resp.json());
+    } catch { /* ignore */ } finally { setLoading(false); }
   }, []);
 
   const loadSessions = useCallback(async () => {
     setLoading(true);
     try {
       const resp = await fetch("/api/coach/sessions");
-      const data: SessionWithResult[] = await resp.json();
-      setSessions(data);
-    } catch { /* ignore */ }
-    finally { setLoading(false); }
+      setSessions(await resp.json());
+    } catch { /* ignore */ } finally { setLoading(false); }
   }, []);
 
   useEffect(() => {
@@ -109,31 +106,45 @@ export default function CoachPanel({ onBack, onDevPanel }: Props) {
 
   const handleTabChange = (tab: Tab) => {
     setActiveTab(tab);
-    if (tab === "operators") loadOperators(); else loadSessions();
+    if (tab === "operators") loadOperators();
+    else loadSessions();
   };
 
-  const toggleSort = () => {
+  const toggleSort = () =>
     setSortOrder(prev => prev === null ? "desc" : prev === "desc" ? "asc" : null);
-  };
 
-  // Per-operator total score map: operatorId -> { total, count }
+  // Per-operator totals: id -> { nik, total, count }
+  const leaderboard = useMemo(() => {
+    const map = new Map<string, { nik: string; total: number; count: number }>();
+    for (const s of sessions) {
+      const key = s.operator_id ?? "__unknown__";
+      const nik = s.operator_email || s.operator_name || key.slice(0, 8);
+      const prev = map.get(key) ?? { nik, total: 0, count: 0 };
+      map.set(key, {
+        nik: prev.nik || nik,
+        total: prev.total + (s.score ?? 0),
+        count: prev.count + (s.score !== null ? 1 : 0),
+      });
+    }
+    return [...map.values()].sort((a, b) => b.total - a.total);
+  }, [sessions]);
+
   const operatorTotals = useMemo(() => {
     const map = new Map<string, { total: number; count: number }>();
     for (const s of sessions) {
       const key = s.operator_id ?? "__unknown__";
       const prev = map.get(key) ?? { total: 0, count: 0 };
-      if (s.score !== null) {
-        map.set(key, { total: prev.total + s.score, count: prev.count + 1 });
-      } else {
-        if (!map.has(key)) map.set(key, prev);
-      }
+      map.set(key, {
+        total: prev.total + (s.score ?? 0),
+        count: prev.count + (s.score !== null ? 1 : 0),
+      });
     }
     return map;
   }, [sessions]);
 
-  const scoredSessions  = useMemo(() => sessions.filter(s => s.score !== null), [sessions]);
-  const totalScore      = useMemo(() => scoredSessions.reduce((s, r) => s + (r.score ?? 0), 0), [scoredSessions]);
-  const averageScore    = useMemo(
+  const scoredSessions = useMemo(() => sessions.filter(s => s.score !== null), [sessions]);
+  const totalScore     = useMemo(() => scoredSessions.reduce((s, r) => s + (r.score ?? 0), 0), [scoredSessions]);
+  const averageScore   = useMemo(
     () => scoredSessions.length > 0 ? (totalScore / scoredSessions.length).toFixed(1) : "—",
     [totalScore, scoredSessions],
   );
@@ -141,11 +152,19 @@ export default function CoachPanel({ onBack, onDevPanel }: Props) {
   const sortedSessions = useMemo(() => {
     if (!sortOrder) return sessions;
     return [...sessions].sort((a, b) => {
-      const sa = a.score ?? -1;
-      const sb = b.score ?? -1;
+      const sa = a.score ?? -1, sb = b.score ?? -1;
       return sortOrder === "asc" ? sa - sb : sb - sa;
     });
   }, [sessions, sortOrder]);
+
+  const handleClearSessions = async () => {
+    if (!confirm("Удалить ВСЕ сессии и баллы? Это действие необратимо.")) return;
+    setClearing(true);
+    try {
+      await fetch("/api/coach/clear-sessions", { method: "DELETE" });
+      setSessions([]);
+    } catch { /* ignore */ } finally { setClearing(false); }
+  };
 
   const exportCsv = () => {
     const ARCHETYPE_CSV: Record<string, string> = {
@@ -157,8 +176,7 @@ export default function CoachPanel({ onBack, onDevPanel }: Props) {
       const tot = operatorTotals.get(s.operator_id ?? "__unknown__") ?? { total: 0, count: 0 };
       return [
         tot.count > 0 ? tot.total : "",
-        s.operator_name ?? "",
-        s.operator_email ?? "",
+        s.operator_name ?? "", s.operator_email ?? "",
         ARCHETYPE_CSV[s.archetype] ?? s.archetype,
         s.status === "active" ? "В процессе" : "Завершён",
         s.score ?? "",
@@ -193,26 +211,20 @@ export default function CoachPanel({ onBack, onDevPanel }: Props) {
         <p className="subtitle">Войдите как коуч</p>
         <div className="login-form">
           <label htmlFor="coach-login">Логин</label>
-          <input
-            id="coach-login" type="text" className="form-input"
+          <input id="coach-login" type="text" className="form-input"
             placeholder="Логин коуча" value={login}
             onChange={(e) => setLogin(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleCodeSubmit()}
-            autoFocus autoComplete="username"
-          />
+            autoFocus autoComplete="username" />
           <label htmlFor="coach-password">Пароль</label>
-          <input
-            id="coach-password" type="password" className="form-input"
+          <input id="coach-password" type="password" className="form-input"
             placeholder="Пароль" value={password}
             onChange={(e) => setPassword(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleCodeSubmit()}
-            autoComplete="current-password"
-          />
+            autoComplete="current-password" />
           {codeError && <p className="error-message">❌ {codeError}</p>}
-          <button
-            className="btn btn-start" onClick={handleCodeSubmit}
-            disabled={!login.trim() || !password.trim()}
-          >
+          <button className="btn btn-start" onClick={handleCodeSubmit}
+            disabled={!login.trim() || !password.trim()}>
             🔑 Войти
           </button>
         </div>
@@ -226,18 +238,23 @@ export default function CoachPanel({ onBack, onDevPanel }: Props) {
       <h2 className="app-title">🛡 Панель Коуча</h2>
 
       <div className="coach-tabs">
-        <button
-          className={`coach-tab ${activeTab === "operators" ? "active" : ""}`}
-          onClick={() => handleTabChange("operators")}
-        >👥 Операторы</button>
-        <button
-          className={`coach-tab ${activeTab === "sessions" ? "active" : ""}`}
-          onClick={() => handleTabChange("sessions")}
-        >📊 Сессии и результаты</button>
+        <button className={`coach-tab ${activeTab === "operators" ? "active" : ""}`}
+          onClick={() => handleTabChange("operators")}>
+          👥 Операторы
+        </button>
+        <button className={`coach-tab ${activeTab === "sessions" ? "active" : ""}`}
+          onClick={() => handleTabChange("sessions")}>
+          📊 Сессии и результаты
+        </button>
+        <button className={`coach-tab ${activeTab === "leaderboard" ? "active" : ""}`}
+          onClick={() => handleTabChange("leaderboard")}>
+          🏆 Рейтинг
+        </button>
       </div>
 
       {loading && <p className="subtitle" style={{ marginTop: 16 }}>Загрузка...</p>}
 
+      {/* ── OPERATORS TAB ── */}
       {activeTab === "operators" && (
         <div className="coach-table-wrap">
           <table className="coach-table">
@@ -258,9 +275,13 @@ export default function CoachPanel({ onBack, onDevPanel }: Props) {
                   <td>{op.verified ? "✅" : "❌"}</td>
                   <td>
                     {op.verified ? (
-                      <button className="btn btn-close" style={{ padding: "4px 12px", fontSize: "0.82rem" }} onClick={() => verify(op.id, false)}>Отменить</button>
+                      <button className="btn btn-close"
+                        style={{ padding: "4px 12px", fontSize: "0.82rem" }}
+                        onClick={() => verify(op.id, false)}>Отменить</button>
                     ) : (
-                      <button className="btn btn-start" style={{ padding: "4px 12px", fontSize: "0.82rem", width: "auto" }} onClick={() => verify(op.id, true)}>Верифицировать</button>
+                      <button className="btn btn-start"
+                        style={{ padding: "4px 12px", fontSize: "0.82rem", width: "auto" }}
+                        onClick={() => verify(op.id, true)}>Верифицировать</button>
                     )}
                   </td>
                 </tr>
@@ -270,9 +291,9 @@ export default function CoachPanel({ onBack, onDevPanel }: Props) {
         </div>
       )}
 
+      {/* ── SESSIONS TAB ── */}
       {activeTab === "sessions" && (
         <>
-          {/* ── Summary stats bar ── */}
           {sessions.length > 0 && (
             <div style={{
               display: "flex", gap: 24, padding: "12px 16px",
@@ -283,11 +304,11 @@ export default function CoachPanel({ onBack, onDevPanel }: Props) {
                 { label: "Всего сессий", value: sessions.length, color: "#e2e8f0" },
                 { label: "Оценённых", value: scoredSessions.length, color: "#e2e8f0" },
                 {
-                  label: "Общий балл (сумма)",
+                  label: "Общий балл",
                   value: totalScore,
-                  color: scoredSessions.length > 0 && totalScore / scoredSessions.length >= 7
-                    ? "#4ade80" : scoredSessions.length > 0 && totalScore / scoredSessions.length >= 4
-                    ? "#facc15" : "#f87171",
+                  color: scoredSessions.length > 0 && totalScore / scoredSessions.length >= 7 ? "#4ade80"
+                       : scoredSessions.length > 0 && totalScore / scoredSessions.length >= 4 ? "#facc15"
+                       : "#f87171",
                 },
                 {
                   label: "Средний балл",
@@ -307,25 +328,19 @@ export default function CoachPanel({ onBack, onDevPanel }: Props) {
             </div>
           )}
 
-          {/* ── Sessions table ── */}
           <div className="coach-table-wrap">
             <table className="coach-table">
               <thead>
                 <tr>
-                  <th
-                    title="Сумма всех баллов этого оператора по всем его сессиям"
-                    style={{ whiteSpace: "nowrap", color: "#facc15" }}
-                  >
+                  <th style={{ whiteSpace: "nowrap", color: "#facc15" }} title="Суммарный балл оператора по всем сессиям">
                     Σ Итог
                   </th>
                   <th>Оператор</th>
                   <th>Архетип</th>
                   <th>Статус</th>
-                  <th
-                    onClick={toggleSort}
+                  <th onClick={toggleSort}
                     style={{ cursor: "pointer", userSelect: "none", whiteSpace: "nowrap" }}
-                    title="Нажмите для сортировки по баллу сессии"
-                  >
+                    title="Нажмите для сортировки">
                     Оценка <SortIcon order={sortOrder} />
                   </th>
                   <th>Сильные стороны</th>
@@ -335,11 +350,7 @@ export default function CoachPanel({ onBack, onDevPanel }: Props) {
               </thead>
               <tbody>
                 {sortedSessions.length === 0 && !loading && (
-                  <tr>
-                    <td colSpan={8} style={{ textAlign: "center", padding: "24px", color: "#666" }}>
-                      Нет сессий
-                    </td>
-                  </tr>
+                  <tr><td colSpan={8} style={{ textAlign: "center", padding: "24px", color: "#666" }}>Нет сессий</td></tr>
                 )}
                 {sortedSessions.map((s) => {
                   const tot = operatorTotals.get(s.operator_id ?? "__unknown__") ?? { total: 0, count: 0 };
@@ -375,13 +386,81 @@ export default function CoachPanel({ onBack, onDevPanel }: Props) {
         </>
       )}
 
+      {/* ── LEADERBOARD TAB ── */}
+      {activeTab === "leaderboard" && (
+        <div className="coach-table-wrap">
+          <table className="coach-table">
+            <thead>
+              <tr>
+                <th style={{ width: 40, textAlign: "center", color: "#facc15" }}>#</th>
+                <th>Ник / Email</th>
+                <th style={{ textAlign: "center", color: "#facc15" }}>Общий балл</th>
+                <th style={{ textAlign: "center" }}>Сессий</th>
+                <th style={{ textAlign: "center" }}>Ср. балл</th>
+              </tr>
+            </thead>
+            <tbody>
+              {leaderboard.length === 0 && !loading && (
+                <tr>
+                  <td colSpan={5} style={{ textAlign: "center", padding: "24px", color: "#666" }}>
+                    Нет данных — сессии ещё не оценены
+                  </td>
+                </tr>
+              )}
+              {leaderboard.map((row, i) => {
+                const avg = row.count > 0 ? (row.total / row.count).toFixed(1) : "—";
+                const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i + 1}`;
+                const totalColor = row.count > 0 && row.total / row.count >= 7 ? "#4ade80"
+                                 : row.count > 0 && row.total / row.count >= 4 ? "#facc15"
+                                 : "#f87171";
+                return (
+                  <tr key={i} style={i === 0 ? { background: "rgba(250,204,21,0.06)" } : undefined}>
+                    <td style={{ textAlign: "center", fontSize: "1.1rem" }}>{medal}</td>
+                    <td>
+                      <span style={{ fontWeight: 600 }}>{row.nik}</span>
+                    </td>
+                    <td style={{ textAlign: "center" }}>
+                      <span style={{
+                        fontWeight: 700, fontSize: "1.15rem", color: totalColor,
+                      }}>
+                        {row.count > 0 ? row.total : "—"}
+                      </span>
+                    </td>
+                    <td style={{ textAlign: "center", color: "#aaa" }}>{row.count}</td>
+                    <td style={{ textAlign: "center" }}>
+                      {avg !== "—"
+                        ? <ScoreBadge score={parseFloat(avg)} />
+                        : <span style={{ color: "#666" }}>—</span>}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* ── ACTIONS ── */}
       <div className="coach-actions">
         <button className="btn btn-close" onClick={onBack}>↩ Назад к входу</button>
-        <button className="coach-refresh-btn" onClick={() => activeTab === "operators" ? loadOperators() : loadSessions()}>
+        <button className="coach-refresh-btn"
+          onClick={() => activeTab === "operators" ? loadOperators() : loadSessions()}>
           🔄 Обновить
         </button>
         {activeTab === "sessions" && sessions.length > 0 && (
-          <button className="coach-refresh-btn" onClick={exportCsv}>📥 Скачать CSV</button>
+          <button className="coach-refresh-btn" onClick={exportCsv}>
+            📥 Скачать CSV
+          </button>
+        )}
+        {(activeTab === "sessions" || activeTab === "leaderboard") && (
+          <button
+            className="btn btn-close"
+            style={{ background: "rgba(239,68,68,0.15)", borderColor: "#ef4444", color: "#f87171" }}
+            onClick={handleClearSessions}
+            disabled={clearing}
+          >
+            {clearing ? "Очищаем..." : "🗑 Очистить все сессии"}
+          </button>
         )}
         <button className="btn btn-send" onClick={onDevPanel}>🛠 Панель разработчика</button>
       </div>
