@@ -215,8 +215,8 @@ FORBIDDEN:
 
 const PHASE_HINTS: Record<ConversationPhase, Record<string, string>> = {
   opening: {
-    ru: `[ФАЗА: Начало разговора. Ты только зашёл в чат — напиши ПЕРВОЕ сообщение сам. Одна строка, без переносов. 1-5 слов, разный каждый раз. Примеры: "ку", "хай", "о живая", "привет красотка", "ну что тут у вас", "хм зашёл случайно", "эй тут кто нибудь", "ты вообще отвечаешь". Пиши похоже или придумай своё — главное коротко и на одной строке.]`,
-    en: `[PHASE: Opening. You just entered the chat — write the FIRST message yourself. One line, no newlines. 1-5 words, different each time. Examples: "hey", "hi there", "oh someone's live", "hey gorgeous", "so what's up", "stumbled in lol", "anyone here", "do u even reply". Write something similar or make up your own — keep it short and on ONE line.]`,
+    ru: `[ФАЗА: Начало — ты только зашёл. Пиши первое сообщение как живой человек в чате. Одна строка, 1-6 слов. Придумай своё — НЕ копируй примеры буквально, используй как вдохновение: "ку)", "хай)", "о, живая)", "привет)", "ну что, не скучно?", "хм, зашёл случайно", "ты вообще отвечаешь?", "о привет красотка". Можно с эмодзи или )). Каждый раз по-разному.]`,
+    en: `[PHASE: Opening — you just entered. Write a first message like a real person. One line, 1-6 words. Make up your own — do NOT copy examples literally, use as inspiration: "hey)", "hi there)", "oh you're live)", "heyy", "so what's up?", "stumbled in lol", "do you even reply?", "hey gorgeous)". Can use emoji or ))]. Be different every time.]`,
   },
   content_inquiry: {
     ru: "[ФАЗА: Интерес к контенту. Спрашиваешь что показывают, сколько стоит приват, что можно получить.]",
