@@ -215,26 +215,8 @@ FORBIDDEN:
 
 const PHASE_HINTS: Record<ConversationPhase, Record<string, string>> = {
   opening: {
-    ru: `[ФАЗА: Начало разговора. Ты только что зашёл в чат — напиши ПЕРВОЕ сообщение сам. Будь разным каждый раз, не повторяй одно и то же. Варианты (выбери похожий или придумай свой):
-• "ку"
-• "хай"
-• "о, живая"
-• "привет красотка"
-• "ну что тут у вас"
-• "хм, зашёл случайно"
-• "эй, тут кто нибудь"
-• "слушай а ты вообще отвечаешь"
-Пиши коротко, 1-5 слов. Опечатки ок.]`,
-    en: `[PHASE: Opening. You just entered the chat — write the FIRST message yourself. Be different each time, don't repeat the same thing. Options (pick similar or make your own):
-• "hey"
-• "hi there"
-• "oh, someone's live"
-• "hey gorgeous"
-• "so what's up"
-• "stumbled in lol"
-• "anyone here"
-• "do you actually reply"
-Keep it short, 1-5 words. Typos fine.]`,
+    ru: `[ФАЗА: Начало разговора. Ты только зашёл в чат — напиши ПЕРВОЕ сообщение сам. Одна строка, без переносов. 1-5 слов, разный каждый раз. Примеры: "ку", "хай", "о живая", "привет красотка", "ну что тут у вас", "хм зашёл случайно", "эй тут кто нибудь", "ты вообще отвечаешь". Пиши похоже или придумай своё — главное коротко и на одной строке.]`,
+    en: `[PHASE: Opening. You just entered the chat — write the FIRST message yourself. One line, no newlines. 1-5 words, different each time. Examples: "hey", "hi there", "oh someone's live", "hey gorgeous", "so what's up", "stumbled in lol", "anyone here", "do u even reply". Write something similar or make up your own — keep it short and on ONE line.]`,
   },
   content_inquiry: {
     ru: "[ФАЗА: Интерес к контенту. Спрашиваешь что показывают, сколько стоит приват, что можно получить.]",
@@ -308,8 +290,8 @@ export async function getAIReply(
   }
 
   const styleReminder = isRu
-    ? "\n\n[ВАЖНО: Пиши как живой человек в мессенджере — коротко, с опечатками, без длинных монологов. Максимум 1-3 коротких предложения. Иногда одно слово или восклицание — это нормально. Разговорный мат (сука, блядь, нахуй) разрешён как эмоциональное выражение — но НИКОГДА не направляй его как оскорбление в адрес собеседника.]"
-    : "\n\n[IMPORTANT: Write like a real person in a chat — short, casual, typos ok, no long monologues. Max 1-3 short sentences. Sometimes just one word or reaction is fine.]";
+    ? "\n\n[ВАЖНО: Пиши как живой человек в мессенджере — коротко, с опечатками, без длинных монологов. Максимум 1-3 коротких предложения. Иногда одно слово или восклицание — это нормально. БЕЗ переносов строк — всё в одну строку. Разговорный мат (сука, блядь, нахуй) разрешён как эмоциональное выражение — но НИКОГДА не направляй его как оскорбление в адрес собеседника.]"
+    : "\n\n[IMPORTANT: Write like a real person in a chat — short, casual, typos ok, no long monologues. Max 1-3 short sentences. Sometimes just one word or reaction is fine. NO newlines — keep everything on one line.]";
 
   let systemPrompt = basePrompt;
   if (phaseHint) systemPrompt += `\n\n${phaseHint}`;
