@@ -116,6 +116,17 @@ router.get("/coach/sessions", async (_req, res) => {
   res.json(rows);
 });
 
+// Clear all sessions and feedback (coach action)
+router.delete("/coach/clear-sessions", async (_req, res) => {
+  try {
+    await db.delete(feedbackTable);
+    await db.delete(sessionsTable);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ detail: "Ошибка очистки" });
+  }
+});
+
 router.get("/ai-status", (_req, res) => {
   const hasKey = !!(process.env["OPENAI_API_KEY1"] ?? process.env["OPENAI_API_KEY"]);
   res.json({
