@@ -27,7 +27,8 @@ router.post("/auth/login", async (req, res) => {
         uid: op.id,
         email: op.email,
         role: op.role,
-        verified: op.verified,
+        verified: true,
+        isNew: false,
         message: "Добро пожаловать!",
       });
       return;
@@ -40,15 +41,16 @@ router.post("/auth/login", async (req, res) => {
       email: normalizedEmail,
       name,
       role: "operator",
-      verified: false,
+      verified: true,
     });
 
     res.json({
       uid,
       email: normalizedEmail,
       role: "operator",
-      verified: false,
-      message: "Зарегистрирован! Ожидайте верификации коуча.",
+      verified: true,
+      isNew: true,
+      message: "Аккаунт создан!",
     });
   } catch (err) {
     req.log.error({ err }, "auth/login error");
