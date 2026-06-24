@@ -16,6 +16,7 @@ export default function App() {
 
   const handleLogin = useCallback((a: AuthResponse) => {
     setAuth(a);
+    sessionStorage.setItem("operator_uid", a.uid);
     if (a.isNew) {
       setView("uid");
     } else {
