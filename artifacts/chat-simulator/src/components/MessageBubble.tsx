@@ -40,7 +40,7 @@ export default function MessageBubble({ message }: Props) {
     return (
       <div className="message-row left">
         <img src={bunnyImg} alt="" className="msg-avatar" />
-        <div>
+        <div className="msg-content-col">
           <div className="bubble member-bubble">
             {content}
             {action?.type === "send_tips" && (
@@ -55,8 +55,10 @@ export default function MessageBubble({ message }: Props) {
 
   return (
     <div className="message-row right">
-      <div className="bubble operator-bubble">{content}</div>
-      <span className="bubble-time">{time}</span>
+      <div className="msg-content-col" style={{ alignItems: "flex-end" }}>
+        <div className="bubble operator-bubble">{content}</div>
+        <span className="bubble-time">{time}</span>
+      </div>
     </div>
   );
 }
