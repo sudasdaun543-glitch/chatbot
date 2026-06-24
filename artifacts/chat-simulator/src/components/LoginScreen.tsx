@@ -9,6 +9,7 @@ interface Props {
 
 export default function LoginScreen({ onLogin, onCoachPanel }: Props) {
   const [email, setEmail] = useState("");
+  const [uid, setUid] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -22,7 +23,7 @@ export default function LoginScreen({ onLogin, onCoachPanel }: Props) {
       const resp = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim() }),
+        body: JSON.stringify({ email: email.trim(), uid: uid.trim() || undefined }),
       });
 
       if (!resp.ok) {
@@ -69,6 +70,25 @@ export default function LoginScreen({ onLogin, onCoachPanel }: Props) {
               required
               autoFocus
               autoComplete="email"
+            />
+          </div>
+
+          <div>
+            <label className="field-label" htmlFor="uid">
+              Пароль (UID)
+              <span style={{ marginLeft: "0.4rem", fontWeight: 400, textTransform: "none", color: "var(--text3)", fontSize: "0.6rem" }}>
+                — первый раз? оставьте пустым
+              </span>
+            </label>
+            <input
+              id="uid"
+              type="text"
+              className="form-input"
+              placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+              value={uid}
+              onChange={(e) => setUid(e.target.value)}
+              autoComplete="off"
+              spellCheck={false}
             />
           </div>
 
