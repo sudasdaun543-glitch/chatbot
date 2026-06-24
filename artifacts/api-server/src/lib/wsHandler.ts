@@ -226,12 +226,14 @@ export function attachWebSocketServer(server: Server): void {
     const match = url.match(/^\/ws\/chat\/([^/?]+)/);
     if (!match) { socket.destroy(); return; }
     const sessionId = match[1];
+    const urlObj = new URL(url, "http://localhost");
+    const uid    = urlObj.searchParams.get("uid") ?? "";
     wss.handleUpgrade(req, socket, head, (ws) => {
-      wss.emit("connection", ws, req, sessionId);
+      wss.emit("connection", ws, req, sessionId, uid);
     });
   });
 
-  wss.on("connection", async (ws: WebSocket, _req: IncomingMessage, sessionId: string) => {
+  wss.on("connection", async (ws: WebSocket, _req: IncomingMessage, sessionId: string, uid: string) => {
     logger.info({ sessionId }, "WS client connected");
 
     const rows = await db.select().from(sessionsTable).where(eq(sessionsTable.id, sessionId)).limit(1);
@@ -242,6 +244,13 @@ export function attachWebSocketServer(server: Server): void {
     }
     const session   = rows[0];
     const archetype = session.archetype as Archetype;
+
+    // Priority 3: verify operator uid matches session owner
+    if (session.operator_id && uid !== session.operator_id) {
+      ws.send(JSON.stringify({ type: "error", role: "system", content: "Доступ запрещён", action: null, feedback: null }));
+      ws.close();
+      return;
+    }
 
     sessionHistories.set(sessionId, []);
     sessionStates.set(sessionId, {
