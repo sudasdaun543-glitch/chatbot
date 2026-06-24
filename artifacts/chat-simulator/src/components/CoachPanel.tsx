@@ -55,6 +55,7 @@ function SortIcon({ order }: { order: SortOrder }) {
 export default function CoachPanel({ onBack, onDevPanel }: Props) {
   const [login, setLogin]       = useState("");
   const [password, setPassword] = useState("");
+  const [token, setToken]       = useState<string | null>(null);
   const [granted, setGranted]   = useState(false);
   const [codeError, setCodeError] = useState<string | null>(null);
   const [operators, setOperators] = useState<OperatorInfo[]>([]);
@@ -63,6 +64,26 @@ export default function CoachPanel({ onBack, onDevPanel }: Props) {
   const [clearing, setClearing]   = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>("operators");
   const [sortOrder, setSortOrder] = useState<SortOrder>(null);
+
+  // ─── Authenticated fetch helper ──────────────────────────────────────────
+
+  const authFetch = useCallback(async (url: string, opts: RequestInit = {}): Promise<Response> => {
+    const resp = await fetch(url, {
+      ...opts,
+      headers: {
+        ...(opts.headers ?? {}),
+        Authorization: `Bearer ${token ?? ""}`,
+      },
+    });
+    if (resp.status === 401) {
+      setGranted(false);
+      setToken(null);
+      setCodeError("Сессия истекла. Войдите снова.");
+    }
+    return resp;
+  }, [token]);
+
+  // ─── Login ───────────────────────────────────────────────────────────────
 
   const handleCodeSubmit = async () => {
     if (!login.trim() || !password.trim()) return;
@@ -78,27 +99,32 @@ export default function CoachPanel({ onBack, onDevPanel }: Props) {
         throw new Error(data.detail ?? "Неверный логин или пароль");
       }
       const result = await resp.json();
-      if (result.granted) setGranted(true);
+      if (result.granted && result.token) {
+        setToken(result.token);
+        setGranted(true);
+      }
     } catch (err: unknown) {
       setCodeError(err instanceof Error ? err.message : "Ошибка доступа");
     }
   };
 
+  // ─── Data loading ─────────────────────────────────────────────────────────
+
   const loadOperators = useCallback(async () => {
     setLoading(true);
     try {
-      const resp = await fetch("/api/coach/operators");
-      setOperators(await resp.json());
+      const resp = await authFetch("/api/coach/operators");
+      if (resp.ok) setOperators(await resp.json());
     } catch { /* ignore */ } finally { setLoading(false); }
-  }, []);
+  }, [authFetch]);
 
   const loadSessions = useCallback(async () => {
     setLoading(true);
     try {
-      const resp = await fetch("/api/coach/sessions");
-      setSessions(await resp.json());
+      const resp = await authFetch("/api/coach/sessions");
+      if (resp.ok) setSessions(await resp.json());
     } catch { /* ignore */ } finally { setLoading(false); }
-  }, []);
+  }, [authFetch]);
 
   useEffect(() => {
     if (granted) { loadOperators(); loadSessions(); }
@@ -113,7 +139,8 @@ export default function CoachPanel({ onBack, onDevPanel }: Props) {
   const toggleSort = () =>
     setSortOrder(prev => prev === null ? "desc" : prev === "desc" ? "asc" : null);
 
-  // Per-operator totals: id -> { nik, total, count }
+  // ─── Computed ─────────────────────────────────────────────────────────────
+
   const leaderboard = useMemo(() => {
     const map = new Map<string, { nik: string; total: number; count: number }>();
     for (const s of sessions) {
@@ -157,13 +184,24 @@ export default function CoachPanel({ onBack, onDevPanel }: Props) {
     });
   }, [sessions, sortOrder]);
 
+  // ─── Actions ─────────────────────────────────────────────────────────────
+
   const handleClearSessions = async () => {
     if (!confirm("Удалить ВСЕ сессии и баллы? Это действие необратимо.")) return;
     setClearing(true);
     try {
-      await fetch("/api/coach/clear-sessions", { method: "DELETE" });
+      await authFetch("/api/coach/clear-sessions", { method: "DELETE" });
       setSessions([]);
     } catch { /* ignore */ } finally { setClearing(false); }
+  };
+
+  const verify = async (id: string, verified: boolean) => {
+    await authFetch(`/api/coach/verify/${id}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ verified }),
+    });
+    loadOperators();
   };
 
   const exportCsv = () => {
@@ -195,14 +233,7 @@ export default function CoachPanel({ onBack, onDevPanel }: Props) {
     URL.revokeObjectURL(url);
   };
 
-  const verify = async (id: string, verified: boolean) => {
-    await fetch(`/api/coach/verify/${id}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ verified }),
-    });
-    loadOperators();
-  };
+  // ─── Login screen ─────────────────────────────────────────────────────────
 
   if (!granted) {
     return (
@@ -232,6 +263,8 @@ export default function CoachPanel({ onBack, onDevPanel }: Props) {
       </div>
     );
   }
+
+  // ─── Main panel ───────────────────────────────────────────────────────────
 
   return (
     <div className="coach-panel">
@@ -416,13 +449,9 @@ export default function CoachPanel({ onBack, onDevPanel }: Props) {
                 return (
                   <tr key={i} style={i === 0 ? { background: "rgba(250,204,21,0.06)" } : undefined}>
                     <td style={{ textAlign: "center", fontSize: "1.1rem" }}>{medal}</td>
-                    <td>
-                      <span style={{ fontWeight: 600 }}>{row.nik}</span>
-                    </td>
+                    <td><span style={{ fontWeight: 600 }}>{row.nik}</span></td>
                     <td style={{ textAlign: "center" }}>
-                      <span style={{
-                        fontWeight: 700, fontSize: "1.15rem", color: totalColor,
-                      }}>
+                      <span style={{ fontWeight: 700, fontSize: "1.15rem", color: totalColor }}>
                         {row.count > 0 ? row.total : "—"}
                       </span>
                     </td>
