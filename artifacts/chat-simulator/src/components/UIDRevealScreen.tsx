@@ -1,40 +1,79 @@
+import { useState } from "react";
 import type { AuthResponse } from "../types";
 
 interface Props {
   auth: AuthResponse;
-  onContinue: (uid: string) => void;
-  onBack: () => void;
+  onContinue: () => void;
 }
 
-export default function UIDRevealScreen({ auth, onContinue, onBack }: Props) {
-  return (
-    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
-      <div style={{ maxWidth: 420, width: "100%", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 16, padding: "2rem" }}>
-        <h2 style={{ marginTop: 0, marginBottom: 8 }}>Добро пожаловать!</h2>
-        <p style={{ color: "#aaa", marginBottom: 16 }}>{auth.message}</p>
+export default function UIDRevealScreen({ auth, onContinue }: Props) {
+  const [copied, setCopied] = useState(false);
+  const [confirmed, setConfirmed] = useState(false);
 
-        <div style={{ background: "rgba(255,255,255,0.06)", borderRadius: 8, padding: "0.75rem 1rem", marginBottom: 16, fontFamily: "monospace", fontSize: 13, color: "#ccc", wordBreak: "break-all" }}>
-          {auth.uid}
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(auth.uid);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* fallback: ignore */
+    }
+  };
+
+  return (
+    <div className="login-screen">
+      <div className="login-card" style={{ maxWidth: 460 }}>
+
+        <div className="uid-title">⚠ Сохраните ваш пароль</div>
+
+        <div className="uid-warning">
+          Это единственный раз, когда вы видите свой уникальный пароль-доступ.
+          При следующем входе он показан <strong>не будет</strong>.
+          Скопируйте его и сохраните в надёжном месте — в заметках, блокноте или менеджере паролей.
         </div>
 
-        {auth.verified ? (
-          <button
-            onClick={() => onContinue(auth.uid)}
-            style={{ width: "100%", padding: "0.75rem", background: "#6366f1", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 15, fontWeight: 600 }}
-          >
-            Начать тренировку →
-          </button>
-        ) : (
-          <div style={{ color: "#fbbf24", fontSize: 14, marginBottom: 12 }}>
-            Ваш аккаунт ещё не верифицирован коучем. Обратитесь к коучу.
+        <div>
+          <label className="field-label">Ваш уникальный пароль (UID)</label>
+          <div className="uid-code-block" style={{ cursor: "pointer", userSelect: "all" }} onClick={handleCopy}>
+            <span className="uid-code-label">нажмите чтобы скопировать</span>
+            <span className="uid-code-value">{auth.uid}</span>
           </div>
-        )}
+          {copied && (
+            <div style={{ fontSize: "0.72rem", color: "var(--green)", marginTop: "0.3rem", fontFamily: "JetBrains Mono, monospace" }}>
+              ✓ скопировано
+            </div>
+          )}
+        </div>
+
+        <div className="uid-status">
+          <span className="uid-status-icon">✉</span>
+          <span className="uid-status-text">
+            Аккаунт: <strong>{auth.email}</strong>
+          </span>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "flex-start", gap: "0.6rem" }}>
+          <input
+            id="uid-confirm"
+            type="checkbox"
+            checked={confirmed}
+            onChange={(e) => setConfirmed(e.target.checked)}
+            style={{ marginTop: "0.15rem", accentColor: "var(--accent)", flexShrink: 0, cursor: "pointer" }}
+          />
+          <label
+            htmlFor="uid-confirm"
+            style={{ fontSize: "0.78rem", color: "var(--text2)", cursor: "pointer", lineHeight: 1.5 }}
+          >
+            Я сохранил(а) свой пароль и понимаю, что восстановить его будет невозможно
+          </label>
+        </div>
 
         <button
-          onClick={onBack}
-          style={{ width: "100%", padding: "0.6rem", background: "transparent", color: "#888", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8, cursor: "pointer", fontSize: 14, marginTop: 8 }}
+          className="btn btn-primary"
+          onClick={onContinue}
+          disabled={!confirmed}
         >
-          ← Назад
+          Начать тренировку →
         </button>
       </div>
     </div>
