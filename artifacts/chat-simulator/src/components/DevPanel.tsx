@@ -15,6 +15,7 @@ interface CoachAccount {
 export default function DevPanel({ onBack }: Props) {
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
+  const [token, setToken] = useState<string | null>(null);
   const [granted, setGranted] = useState(false);
   const [codeError, setCodeError] = useState<string | null>(null);
   const [operators, setOperators] = useState<OperatorInfo[]>([]);
@@ -27,6 +28,26 @@ export default function DevPanel({ onBack }: Props) {
   const [createError, setCreateError] = useState<string | null>(null);
   const [createSuccess, setCreateSuccess] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+
+  // ─── Authenticated fetch helper ──────────────────────────────────────────
+
+  const authFetch = useCallback(async (url: string, opts: RequestInit = {}): Promise<Response> => {
+    const resp = await fetch(url, {
+      ...opts,
+      headers: {
+        ...(opts.headers ?? {}),
+        Authorization: `Bearer ${token ?? ""}`,
+      },
+    });
+    if (resp.status === 401) {
+      setGranted(false);
+      setToken(null);
+      setCodeError("Сессия истекла. Войдите снова.");
+    }
+    return resp;
+  }, [token]);
+
+  // ─── Login ───────────────────────────────────────────────────────────────
 
   const handleCodeSubmit = async () => {
     if (!login.trim() || !password.trim()) return;
@@ -42,27 +63,32 @@ export default function DevPanel({ onBack }: Props) {
         throw new Error(data.detail ?? "Неверный логин или пароль");
       }
       const result = await resp.json();
-      if (result.granted) setGranted(true);
+      if (result.granted && result.token) {
+        setToken(result.token);
+        setGranted(true);
+      }
     } catch (err: unknown) {
       setCodeError(err instanceof Error ? err.message : "Ошибка доступа");
     }
   };
 
+  // ─── Data loading ─────────────────────────────────────────────────────────
+
   const loadOperators = useCallback(async () => {
     setLoading(true);
     try {
-      const resp = await fetch("/api/coach/operators");
-      setOperators(await resp.json());
+      const resp = await authFetch("/api/coach/operators");
+      if (resp.ok) setOperators(await resp.json());
     } catch { /* ignore */ } finally { setLoading(false); }
-  }, []);
+  }, [authFetch]);
 
   const loadCoaches = useCallback(async () => {
     setLoading(true);
     try {
-      const resp = await fetch("/api/dev/coaches");
-      setCoaches(await resp.json());
+      const resp = await authFetch("/api/dev/coaches");
+      if (resp.ok) setCoaches(await resp.json());
     } catch { /* ignore */ } finally { setLoading(false); }
-  }, []);
+  }, [authFetch]);
 
   useEffect(() => {
     if (!granted) return;
@@ -81,7 +107,7 @@ export default function DevPanel({ onBack }: Props) {
     setCreateError(null);
     setCreateSuccess(null);
     try {
-      const resp = await fetch("/api/dev/coaches", {
+      const resp = await authFetch("/api/dev/coaches", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ login: newLogin.trim(), password: newPassword }),
@@ -104,9 +130,11 @@ export default function DevPanel({ onBack }: Props) {
 
   const handleDeleteCoach = async (id: string, coachLogin: string) => {
     if (!confirm(`Удалить коуча «${coachLogin}»?`)) return;
-    await fetch(`/api/dev/coaches/${id}`, { method: "DELETE" });
+    await authFetch(`/api/dev/coaches/${id}`, { method: "DELETE" });
     loadCoaches();
   };
+
+  // ─── Login screen ─────────────────────────────────────────────────────────
 
   if (!granted) {
     return (
@@ -150,6 +178,8 @@ export default function DevPanel({ onBack }: Props) {
       </div>
     );
   }
+
+  // ─── Main panel ───────────────────────────────────────────────────────────
 
   return (
     <div className="coach-panel">
