@@ -5,8 +5,33 @@ import crypto from "crypto";
 
 const router = Router();
 
+// ─── Priority 2: In-memory rate limiter (10 req/min per IP) ───────────────
+
+const loginAttempts = new Map<string, number[]>();
+
+function isRateLimited(ip: string): boolean {
+  const now    = Date.now();
+  const window = 60_000; // 1 minute
+  const max    = 10;
+  const prev   = (loginAttempts.get(ip) ?? []).filter(t => now - t < window);
+  prev.push(now);
+  loginAttempts.set(ip, prev);
+  return prev.length > max;
+}
+
+// ─── Auth ─────────────────────────────────────────────────────────────────
+
 router.post("/auth/login", async (req, res) => {
   try {
+    const ip = (req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim()
+      ?? req.socket.remoteAddress
+      ?? "unknown";
+
+    if (isRateLimited(ip)) {
+      res.status(429).json({ detail: "Слишком много попыток. Подождите минуту." });
+      return;
+    }
+
     const { email, uid } = req.body as { email?: string; uid?: string };
     if (!email) {
       res.status(400).json({ detail: "Email обязателен" });
