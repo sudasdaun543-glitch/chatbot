@@ -7,13 +7,14 @@ const router = Router();
 
 router.post("/auth/login", async (req, res) => {
   try {
-    const { email } = req.body as { email?: string };
+    const { email, uid } = req.body as { email?: string; uid?: string };
     if (!email) {
       res.status(400).json({ detail: "Email обязателен" });
       return;
     }
 
     const normalizedEmail = email.trim().toLowerCase();
+    const providedUid = uid?.trim() ?? "";
 
     const existing = await db
       .select()
@@ -23,6 +24,17 @@ router.post("/auth/login", async (req, res) => {
 
     if (existing.length > 0) {
       const op = existing[0];
+
+      if (!providedUid) {
+        res.status(401).json({ detail: "Введите ваш пароль (UID)" });
+        return;
+      }
+
+      if (op.id !== providedUid) {
+        res.status(401).json({ detail: "Неверный пароль" });
+        return;
+      }
+
       res.json({
         uid: op.id,
         email: op.email,
@@ -34,10 +46,15 @@ router.post("/auth/login", async (req, res) => {
       return;
     }
 
-    const uid = crypto.randomUUID();
+    if (providedUid) {
+      res.status(404).json({ detail: "Аккаунт с таким email не найден" });
+      return;
+    }
+
+    const newUid = crypto.randomUUID();
     const name = normalizedEmail.split("@")[0];
     await db.insert(operatorsTable).values({
-      id: uid,
+      id: newUid,
       email: normalizedEmail,
       name,
       role: "operator",
@@ -45,7 +62,7 @@ router.post("/auth/login", async (req, res) => {
     });
 
     res.json({
-      uid,
+      uid: newUid,
       email: normalizedEmail,
       role: "operator",
       verified: true,
