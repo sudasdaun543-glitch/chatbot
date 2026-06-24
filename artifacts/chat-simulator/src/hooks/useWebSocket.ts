@@ -11,7 +11,8 @@ export function useWebSocket(sessionId: string) {
 
   useEffect(() => {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${protocol}//${window.location.host}/ws/chat/${sessionId}`;
+    const uid = sessionStorage.getItem("operator_uid") ?? "";
+    const wsUrl = `${protocol}//${window.location.host}/ws/chat/${sessionId}?uid=${encodeURIComponent(uid)}`;
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
