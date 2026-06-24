@@ -16,17 +16,15 @@ export default function App() {
 
   const handleLogin = useCallback((a: AuthResponse) => {
     setAuth(a);
-    setView("uid");
+    if (a.isNew) {
+      setView("uid");
+    } else {
+      setView("starter");
+    }
   }, []);
 
-  const handleContinue = useCallback((_uid: string) => {
-    if (!auth?.verified) return;
+  const handleUIDContinue = useCallback(() => {
     setView("starter");
-  }, [auth]);
-
-  const handleBackToLogin = useCallback(() => {
-    setAuth(null);
-    setView("login");
   }, []);
 
   const handleStartSession = useCallback((session: SessionInfo) => {
@@ -63,8 +61,7 @@ export default function App() {
       {view === "uid" && auth && (
         <UIDRevealScreen
           auth={auth}
-          onContinue={handleContinue}
-          onBack={handleBackToLogin}
+          onContinue={handleUIDContinue}
         />
       )}
       {view === "starter" && auth && (
